@@ -16,12 +16,14 @@ import caso5 from '../ejemplos/caso5.json';
 import caso6 from '../ejemplos/caso6.json';
 import caso4 from '../ejemplos/caso4.json';
 import panaderia from '../ejemplos/panaderia.json';
+import cafeteria from '../ejemplos/cafeteria.json';
 
 const EJEMPLOS = {
   caso5: { nombre: 'Caso 5: Artesanías de madera', datos: caso5 },
   caso6: { nombre: 'Caso 6: Prendas (con gracia)', datos: caso6 },
   caso4: { nombre: 'Caso 4: Segundo parcial', datos: caso4 },
   panaderia: { nombre: 'Panadería: 3 productos, 12 años', datos: panaderia },
+  cafeteria: { nombre: 'Cafetería: 2 productos, 5 años (tutorial)', datos: cafeteria },
 };
 const clonar = o => JSON.parse(JSON.stringify(o));
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

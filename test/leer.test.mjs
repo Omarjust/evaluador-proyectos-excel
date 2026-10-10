@@ -23,7 +23,7 @@ function valoresDe(hoja) {
   return m;
 }
 
-for (const caso of ['caso4', 'caso5', 'caso6', 'panaderia']) {
+for (const caso of ['caso4', 'caso5', 'caso6', 'panaderia', 'cafeteria']) {
   test(`Datos ida y vuelta: ${caso}`, () => {
     const d = leerJSON(`../ejemplos/${caso}.json`);
     const vals = valoresDe(hojaDatos(normalizar(d)));

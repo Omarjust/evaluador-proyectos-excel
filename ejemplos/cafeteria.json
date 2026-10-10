@@ -1,0 +1,118 @@
+{
+  "proyecto": {
+    "nombre": "Cafetería Grano Andino",
+    "caso": "Tutorial: plantilla vacía (5 años)",
+    "moneda": "Bs",
+    "n": 5,
+    "tasa": 0.14,
+    "iue": 0.25,
+    "ctModo": "meses",
+    "ct": 2
+  },
+  "productos": [
+    {
+      "nombre": "Café de especialidad",
+      "unidad": "taza",
+      "precio": 18,
+      "cvu": 6.5,
+      "capacidad": 30000,
+      "pct": [
+        0.6,
+        0.7,
+        0.8,
+        0.9,
+        1
+      ]
+    },
+    {
+      "nombre": "Postres",
+      "unidad": "porción",
+      "precio": 15,
+      "cvu": 7,
+      "unidades": [
+        8000,
+        9500,
+        11000,
+        12000,
+        12500
+      ]
+    }
+  ],
+  "costosFijos": [
+    {
+      "nombre": "Sueldos",
+      "monto": 144000
+    },
+    {
+      "nombre": "Alquiler",
+      "monto": 48000
+    },
+    {
+      "nombre": "Servicios básicos",
+      "monto": 18000
+    }
+  ],
+  "activos": [
+    {
+      "nombre": "Máquina de espresso",
+      "valor": 45000,
+      "vida": 5,
+      "pctMercado": 0.2
+    },
+    {
+      "nombre": "Equipo de cocina",
+      "valor": 25000,
+      "vida": 8,
+      "pctMercado": 0.3
+    },
+    {
+      "nombre": "Mobiliario",
+      "valor": 30000,
+      "vida": 10,
+      "pctMercado": 0.4
+    },
+    {
+      "nombre": "Remodelación del local",
+      "valor": 40000,
+      "vida": 10
+    }
+  ],
+  "diferidos": [
+    {
+      "nombre": "Licencias y trámites",
+      "monto": 8000
+    }
+  ],
+  "prestamo": {
+    "pctInversion": 0.6,
+    "tasa": 0.12,
+    "plazo": 4,
+    "gracia": 1
+  },
+  "riesgo": {
+    "variables": {
+      "precio": {
+        "min": 0.9,
+        "moda": 1,
+        "max": 1.05
+      },
+      "cantidad": {
+        "min": 0.85,
+        "moda": 1,
+        "max": 1.1
+      },
+      "cvu": {
+        "min": 0.95,
+        "moda": 1,
+        "max": 1.12
+      },
+      "costosFijos": {
+        "min": 0.95,
+        "moda": 1,
+        "max": 1.1
+      }
+    },
+    "ensayos": 10000,
+    "semilla": 2026
+  }
+}
