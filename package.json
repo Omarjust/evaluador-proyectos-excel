@@ -1,0 +1,22 @@
+{
+  "name": "evaluador-proyectos-excel",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Complemento de Excel para Evaluación de Proyectos: flujo de caja, VAC/CAE, sensibilidad, Monte Carlo y preguntas de riesgo.",
+  "scripts": {
+    "dev": "vite --port 3000 --strictPort",
+    "build": "vite build && node tools/manifest.mjs",
+    "preview": "vite preview --port 3000",
+    "test": "node --test test/",
+    "verificar": "sh tools/verificar.sh ejemplos/caso5.json /tmp"
+  },
+  "dependencies": {
+    "@fontsource/geist-mono": "5.2.5",
+    "@fontsource/geist-sans": "5.2.5",
+    "@phosphor-icons/core": "2.1.1"
+  },
+  "devDependencies": {
+    "vite": "5.4.11"
+  }
+}

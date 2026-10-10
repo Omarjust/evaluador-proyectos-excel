@@ -1,0 +1,297 @@
+/* global Excel, Office */
+// Ejecuta el plan de hojas con Office.js (Excel Mac, Windows y web). Requiere ExcelApi 1.9.
+import { colIndice, colLetra } from './plan.js';
+import { H, NOMBRES } from './mapa.js';
+import { ORDEN } from './libro.js';
+
+const GENERADAS = [H.resumen, H.ventas, H.dep, H.prest, H.flujo, H.vac, H.riesgo, H.diag, H.mc];
+const BLOQUE_FILAS = 2000;
+
+// Tamaño de una dirección A1 ("B5:V20" → 16 filas × 21 columnas)
+function dims(addr) {
+  const [a, b = a] = addr.split(':');
+  const p = s => { const m = /^([A-Z]+)(\d+)$/.exec(s); return m ? [colIndice(m[1]), Number(m[2])] : null; };
+  const pa = p(a), pb = p(b);
+  if (!pa || !pb) return null;
+  return { filas: pb[1] - pa[1] + 1, cols: pb[0] - pa[0] + 1, c0: pa[0], r0: pa[1] };
+}
+const matriz = (d, v) => Array.from({ length: d.filas }, () => Array(d.cols).fill(v));
+
+export const disponible = () => typeof Office !== 'undefined' && typeof Excel !== 'undefined' && !!Office.context?.requirements;
+export const soporta = v => disponible() && Office.context.requirements.isSetSupported('ExcelApi', v);
+
+// Hojas generadas que ya existen en el libro
+export async function hojasExistentes() {
+  return Excel.run(async ctx => {
+    const ws = ctx.workbook.worksheets;
+    ws.load('items/name');
+    await ctx.sync();
+    return ws.items.map(w => w.name);
+  });
+}
+
+// Escribe todas las hojas. Las hojas generadas anteriores se reemplazan (Datos solo si viene en el plan).
+// parcial: solo reemplaza las hojas del plan (no borra las demás generadas)
+export async function escribirLibro(hojas, { progreso = () => {}, parcial = false } = {}) {
+  const nombres = hojas.map(h => h.nombre);
+  // 1) Renombra las hojas viejas que se van a reemplazar, crea las nuevas vacías y borra las viejas
+  await Excel.run(async ctx => {
+    const wb = ctx.workbook;
+    const ws = wb.worksheets;
+    ws.load('items/name');
+    await ctx.sync();
+    const viejas = ws.items.filter(w => nombres.includes(w.name) || (!parcial && GENERADAS.includes(w.name) && w.name !== H.datos));
+    viejas.forEach((w, i) => { w.name = `_viejo_${i}_${Date.now() % 100000}`; });
+    await ctx.sync();
+    for (const h of hojas) {
+      const nueva = ws.add(h.nombre);
+      if (h.color) nueva.tabColor = h.color;
+    }
+    await ctx.sync();
+    viejas.forEach(w => w.delete());
+    // Nombres definidos: se recrean todos los que usa el plan
+    const defs = hojas.flatMap(h => h.ops.filter(o => o.op === 'nombre'));
+    const todos = [...new Set([...defs.map(d => d.nombre), ...Object.keys(NOMBRES)])];
+    todos.forEach(n => wb.names.getItemOrNullObject(n).delete());
+    await ctx.sync().catch(() => ctx.sync());
+  });
+  // Nombres de la hoja Datos (también cuando Datos no se regenera)
+  await Excel.run(async ctx => {
+    Object.entries(NOMBRES).forEach(([n, r]) => { try { ctx.workbook.names.add(n, `=${r}`); } catch (e) { /* ya existe */ } });
+    await ctx.sync().catch(() => {});
+  });
+
+  // 2) Escribe cada hoja
+  let k = 0;
+  for (const h of hojas) {
+    progreso(`Escribiendo ${h.nombre}`, k / hojas.length);
+    await escribirHoja(h);
+    k++;
+  }
+  // 3) Orden, visibilidad y hoja activa
+  await Excel.run(async ctx => {
+    const ws = ctx.workbook.worksheets;
+    ws.load('items/name');
+    await ctx.sync();
+    let pos = 0;
+    for (const n of ORDEN) {
+      const w = ws.items.find(x => x.name === n);
+      if (w) { w.position = pos++; }
+    }
+    await ctx.sync();
+    hojas.filter(h => h.oculta).forEach(h => { ws.getItem(h.nombre).visibility = 'Hidden'; });
+    const flujo = ws.items.find(x => x.name === H.flujo);
+    if (flujo && !parcial) flujo.activate();
+    await ctx.sync();
+  });
+  progreso('Listo', 1);
+}
+
+async function escribirHoja(h) {
+  // Escrituras grandes (por ejemplo _MC) en bloques de 2.000 filas
+  const grandes = h.ops.filter(o => o.op === 'set' && o.datos.length > BLOQUE_FILAS);
+  const resto = h.ops.filter(o => !grandes.includes(o));
+  const graficos = [];
+  try {
+    await Excel.run(async ctx => {
+      const sh = ctx.workbook.worksheets.getItem(h.nombre);
+      if (soporta('1.6')) ctx.application.suspendApiCalculationUntilNextSync();
+      for (const o of resto) aplicar(ctx, sh, o, graficos);
+      await ctx.sync();
+    });
+  } catch (e) {
+    // Alguna operación no es compatible con esta versión de Excel: se reintenta una por una
+    console.warn('Reintento por operación en', h.nombre, e);
+    graficos.length = 0;
+    for (const o of resto) {
+      try {
+        await Excel.run(async ctx => { aplicar(ctx, ctx.workbook.worksheets.getItem(h.nombre), o, graficos); await ctx.sync(); });
+      } catch (err) { console.warn('op omitida', h.nombre, o.op, o.addr || o.nombre, err.message); }
+    }
+  }
+  // Los gráficos al final, cada uno protegido: si una opción no existe en esta versión de Excel, se omite
+  for (const g of graficos) {
+    try { await Excel.run(async ctx => crearGrafico(ctx, ctx.workbook.worksheets.getItem(h.nombre), g)); } catch (e) { console.warn('gráfico', h.nombre, g.titulo, e); }
+  }
+  for (const o of grandes) {
+    const d = dims(o.addr);
+    for (let i = 0; i < o.datos.length; i += BLOQUE_FILAS) {
+      const parte = o.datos.slice(i, i + BLOQUE_FILAS);
+      await Excel.run(async ctx => {
+        const sh = ctx.workbook.worksheets.getItem(h.nombre);
+        if (soporta('1.6')) ctx.application.suspendApiCalculationUntilNextSync();
+        const addr = `${colLetra(d.c0)}${d.r0 + i}:${colLetra(d.c0 + d.cols - 1)}${d.r0 + i + parte.length - 1}`;
+        sh.getRange(addr).values = parte;
+        await ctx.sync();
+      });
+    }
+  }
+}
+
+function aplicar(ctx, sh, o, graficos) {
+  switch (o.op) {
+    case 'set': {
+      const r = sh.getRange(o.addr);
+      r.formulas = o.datos.map(f => f.map(v => (v === null || v === undefined ? '' : v)));
+      break;
+    }
+    case 'fmt': {
+      const r = sh.getRange(o.addr), f = o.f, fmt = r.format;
+      if (f.fill) fmt.fill.color = f.fill;
+      if (f.bold !== undefined) fmt.font.bold = f.bold;
+      if (f.italic) fmt.font.italic = true;
+      if (f.size) fmt.font.size = f.size;
+      if (f.color) fmt.font.color = f.color;
+      if (f.align) fmt.horizontalAlignment = f.align;
+      if (f.wrap) { fmt.wrapText = true; fmt.verticalAlignment = 'Top'; }
+      if (f.numFmt) { const d = dims(o.addr); if (d) r.numberFormat = matriz(d, f.numFmt); }
+      if (f.borde) {
+        ['EdgeTop', 'EdgeBottom', 'EdgeLeft', 'EdgeRight', 'InsideVertical', 'InsideHorizontal'].forEach(b => {
+          const d = dims(o.addr);
+          if (d && d.filas === 1 && b === 'InsideHorizontal') return;
+          if (d && d.cols === 1 && b === 'InsideVertical') return;
+          const x = fmt.borders.getItem(b); x.style = 'Continuous'; x.color = '#808080';
+        });
+      }
+      break;
+    }
+    case 'ancho': {
+      const cols = o.cols.includes(':') ? o.cols : `${o.cols}:${o.cols}`;
+      sh.getRange(cols).format.columnWidth = o.pts;
+      break;
+    }
+    case 'nombre':
+      if (!NOMBRES[o.nombre]) ctx.workbook.names.add(o.nombre, `=${o.ref}`); // los de Datos ya se crearon
+      break;
+    case 'grafico':
+      graficos.push(o.g);
+      break;
+    case 'inmovilizar':
+      if (o.filas && o.cols) sh.freezePanes.freezeAt(sh.getRange(`A1:${colLetra(o.cols - 1)}${o.filas}`));
+      else if (o.filas) sh.freezePanes.freezeRows(o.filas);
+      else if (o.cols) sh.freezePanes.freezeColumns(o.cols);
+      break;
+    case 'validacion': {
+      if (!soporta('1.8')) break;
+      const r = sh.getRange(o.addr), v = o.v;
+      r.dataValidation.clear();
+      if (v.lista) r.dataValidation.rule = { list: { inCellDropDown: true, source: v.lista.join(',') } };
+      else if (v.entero) r.dataValidation.rule = { wholeNumber: { formula1: v.entero[0], formula2: v.entero[1], operator: 'Between' } };
+      else if (v.decimal) r.dataValidation.rule = { decimal: { formula1: v.decimal[0], formula2: v.decimal[1], operator: 'Between' } };
+      if (v.aviso) r.dataValidation.prompt = { showPrompt: true, title: 'Ayuda', message: v.aviso };
+      break;
+    }
+    case 'vinculo':
+      sh.getRange(o.addr).hyperlink = { documentReference: o.destino, textToDisplay: o.texto };
+      break;
+    case 'semaforo': {
+      const r = sh.getRange(o.addr);
+      for (const [texto, color, op = 'Contains'] of o.reglas) {
+        const cf = r.conditionalFormats.add('ContainsText');
+        cf.textComparison.format.fill.color = color;
+        cf.textComparison.rule = { operator: op === 'beginsWith' ? 'BeginsWith' : 'Contains', text: texto };
+      }
+      break;
+    }
+    default:
+  }
+}
+
+async function crearGrafico(ctx, sh, g) {
+  const ch = sh.charts.add(g.tipo, sh.getRange(g.datos), g.por || 'Auto');
+  ch.title.text = g.titulo;
+  ch.title.format.font.size = 12;
+  ch.setPosition(g.pos[0], g.pos[1]);
+  if (g.leyenda === 'None') ch.legend.visible = false;
+  else { ch.legend.visible = true; ch.legend.position = g.leyenda || 'Bottom'; }
+  await ctx.sync();
+  const s = ch.series;
+  s.load('count');
+  await ctx.sync();
+  const seguro = async fn => { try { fn(); await ctx.sync(); } catch (e) { /* opción no disponible */ } };
+  if (g.formatoEje) await seguro(() => { ch.axes.valueAxis.numberFormat = g.formatoEje; });
+  if (g.formatoEjeX) await seguro(() => { ch.axes.categoryAxis.numberFormat = g.formatoEjeX; });
+  if (g.tornado) {
+    await seguro(() => {
+      const s0 = s.getItemAt(0);
+      s0.overlap = 100; s0.gapWidth = 40;
+      s0.format.fill.setSolidColor('#B91C1C');
+      if (s.count > 1) s.getItemAt(1).format.fill.setSolidColor('#2F6DB5');
+    });
+    await seguro(() => { ch.axes.categoryAxis.reversePlotOrder = true; });
+    await seguro(() => { ch.axes.categoryAxis.tickLabelPosition = 'Low'; });
+  }
+  if (g.gap !== undefined) await seguro(() => { s.getItemAt(0).gapWidth = g.gap; });
+  if (g.tipo === 'ColumnClustered' || g.tipo === 'ColumnStacked') {
+    const paleta = ['#2F6DB5', '#15803D', '#B45309', '#7C3AED', '#0E7490', '#BE185D', '#4D7C0F', '#9A3412', '#1D4ED8', '#525252'];
+    await seguro(() => { for (let i = 0; i < s.count; i++) s.getItemAt(i).format.fill.setSolidColor(paleta[i % paleta.length]); });
+  }
+  if (g.rojos && g.rojos.length) {
+    await seguro(() => { g.rojos.forEach(i => s.getItemAt(0).points.getItemAt(i).format.fill.setSolidColor('#B91C1C')); });
+  }
+}
+
+// ---------- Lectura ----------
+
+export async function leerRango(hoja, addr) {
+  return Excel.run(async ctx => {
+    const sh = ctx.workbook.worksheets.getItemOrNullObject(hoja);
+    await ctx.sync();
+    if (sh.isNullObject) return null;
+    const r = sh.getRange(addr);
+    r.load('values');
+    await ctx.sync();
+    return r.values;
+  });
+}
+
+// Lee varios rangos de varias hojas en una sola llamada: [{hoja, addr}] → [valores|null]
+export async function leerVarios(pedidos) {
+  return Excel.run(async ctx => {
+    const ws = ctx.workbook.worksheets;
+    ws.load('items/name');
+    await ctx.sync();
+    const existentes = new Set(ws.items.map(w => w.name));
+    const rangos = pedidos.map(p => (existentes.has(p.hoja) ? ws.getItem(p.hoja).getRange(p.addr) : null));
+    rangos.forEach(r => r && r.load('values'));
+    await ctx.sync();
+    return rangos.map(r => (r ? r.values : null));
+  });
+}
+
+export async function irA(hoja, addr = 'A1') {
+  return Excel.run(async ctx => {
+    const sh = ctx.workbook.worksheets.getItem(hoja);
+    sh.activate();
+    sh.getRange(addr).select();
+    await ctx.sync();
+  });
+}
+
+// Avisa cuando el estudiante edita la hoja Datos (para marcar resultados como desactualizados)
+export async function vigilarDatos(callback) {
+  if (!soporta('1.7')) return null;
+  return Excel.run(async ctx => {
+    const sh = ctx.workbook.worksheets.getItemOrNullObject(H.datos);
+    await ctx.sync();
+    if (sh.isNullObject) return null;
+    let t = null;
+    sh.onChanged.add(async () => { clearTimeout(t); t = setTimeout(callback, 500); });
+    await ctx.sync();
+    return true;
+  });
+}
+
+// Agrega una fila de pregunta (con fórmulas vivas) al final de la tabla de preguntas de Riesgo
+export async function agregarPregunta(fila, valores) {
+  return Excel.run(async ctx => {
+    const sh = ctx.workbook.worksheets.getItem(H.riesgo);
+    sh.getRange(`A${fila}:F${fila}`).insert('Down');
+    const r = sh.getRange(`A${fila}:F${fila}`);
+    r.formulas = [valores.map(v => v ?? '')];
+    r.format.fill.clear();
+    sh.getRange(`D${fila}:E${fila}`).numberFormat = [[valores.formato === 'dinero' ? '#,##0' : '0.00%', valores.formato === 'dinero' ? '#,##0' : '0.00%']];
+    r.select();
+    await ctx.sync();
+  });
+}

@@ -1,0 +1,14 @@
+{
+  "proyecto": { "nombre": "Caso 4 Segundo Parcial", "caso": "Ejercicio 4", "moneda": "$us", "n": 5, "tasa": 0.16, "iue": 0.25, "ctModo": "meses", "ct": 2 },
+  "productos": [
+    { "nombre": "Producto", "unidad": "u", "precio": 192, "cvu": 140, "unidades": [10000, 12800, 15000, 15000, 15000] }
+  ],
+  "costosFijos": [ { "nombre": "Costos fijos", "monto": 380000 } ],
+  "activos": [
+    { "nombre": "Terreno", "valor": 100000 },
+    { "nombre": "Obras civiles", "valor": 140000, "vida": 20 },
+    { "nombre": "Equipo A", "valor": 120000, "vida": 10, "pctMercado": 0.2 },
+    { "nombre": "Equipo B", "valor": 80000, "vida": 5, "pctMercado": 0.2 }
+  ],
+  "prestamo": { "monto": 200000, "tasa": 0.14, "plazo": 5, "gracia": 0 }
+}

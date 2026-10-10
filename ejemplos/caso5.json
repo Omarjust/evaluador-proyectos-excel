@@ -1,0 +1,15 @@
+{
+  "proyecto": { "nombre": "Artesanías de madera", "caso": "Caso 5 (Tema 4)", "moneda": "$us", "n": 6, "tasa": 0.13, "iue": 0.25, "ctModo": "pct", "ct": 0.25 },
+  "productos": [
+    { "nombre": "Artesanías", "unidad": "u", "precio": 17, "cvu": 4, "capacidad": 20000, "pct": [0.7, 0.8, 1, 1, 1, 1] }
+  ],
+  "costosFijos": [ { "nombre": "Costo fijo anual", "monto": 45000 } ],
+  "activos": [
+    { "nombre": "Terreno", "valor": 120000, "montoMercado": 140000 },
+    { "nombre": "Equipos A", "valor": 180000, "vida": 6, "pctMercado": 0.2 },
+    { "nombre": "Equipos B", "valor": 81000, "vida": 6, "pctMercado": 0.25 },
+    { "nombre": "Mobiliario", "valor": 12000, "vida": 10, "pctMercado": 0.3 },
+    { "nombre": "Edificio y obras civiles", "valor": 120000, "vida": 20, "pctMercado": 0.5 }
+  ],
+  "prestamo": { "monto": 261000, "tasa": 0.10, "plazo": 5, "gracia": 0 }
+}

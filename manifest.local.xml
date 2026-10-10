@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+  xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
+  xsi:type="TaskPaneApp">
+  <Id>440b3c6b-404d-4de6-88e1-4786c02f0ae5</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>Evaluación de Proyectos UPB</ProviderName>
+  <DefaultLocale>es-ES</DefaultLocale>
+  <DisplayName DefaultValue="Evaluador de Proyectos (local)"/>
+  <Description DefaultValue="Flujo de caja, depreciación, préstamo, VAC y CAE, sensibilidad, araña, Monte Carlo y preguntas de riesgo explicadas con su porqué."/>
+  <IconUrl DefaultValue="https://localhost:3000/assets/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://localhost:3000/assets/icon-64.png"/>
+  <SupportUrl DefaultValue="https://localhost:3000/"/>
+  <AppDomains>
+    <AppDomain>https://localhost:3000</AppDomain>
+  </AppDomains>
+  <Hosts>
+    <Host Name="Workbook"/>
+  </Hosts>
+  <Requirements>
+    <Sets DefaultMinVersion="1.1">
+      <Set Name="ExcelApi" MinVersion="1.7"/>
+    </Sets>
+  </Requirements>
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://localhost:3000/index.html"/>
+  </DefaultSettings>
+  <Permissions>ReadWriteDocument</Permissions>
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="Workbook">
+        <DesktopFormFactor>
+          <GetStarted>
+            <Title resid="Inicio.Titulo"/>
+            <Description resid="Inicio.Descripcion"/>
+            <LearnMoreUrl resid="Inicio.Url"/>
+          </GetStarted>
+          <FunctionFile resid="Panel.Url"/>
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <OfficeTab id="TabHome">
+              <Group id="Evaluador.Grupo">
+                <Label resid="Grupo.Etiqueta"/>
+                <Icon>
+                  <bt:Image size="16" resid="Icono.16"/>
+                  <bt:Image size="32" resid="Icono.32"/>
+                  <bt:Image size="80" resid="Icono.80"/>
+                </Icon>
+                <Control xsi:type="Button" id="Evaluador.Abrir">
+                  <Label resid="Boton.Etiqueta"/>
+                  <Supertip>
+                    <Title resid="Boton.Etiqueta"/>
+                    <Description resid="Boton.Ayuda"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icono.16"/>
+                    <bt:Image size="32" resid="Icono.32"/>
+                    <bt:Image size="80" resid="Icono.80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>EvaluadorPanel</TaskpaneId>
+                    <SourceLocation resid="Panel.Url"/>
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Icono.16" DefaultValue="https://localhost:3000/assets/icon-16.png"/>
+        <bt:Image id="Icono.32" DefaultValue="https://localhost:3000/assets/icon-32.png"/>
+        <bt:Image id="Icono.80" DefaultValue="https://localhost:3000/assets/icon-80.png"/>
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="Inicio.Url" DefaultValue="https://localhost:3000/"/>
+        <bt:Url id="Panel.Url" DefaultValue="https://localhost:3000/index.html"/>
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="Inicio.Titulo" DefaultValue="Evaluador de Proyectos listo"/>
+        <bt:String id="Grupo.Etiqueta" DefaultValue="Evaluación"/>
+        <bt:String id="Boton.Etiqueta" DefaultValue="Evaluador"/>
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="Inicio.Descripcion" DefaultValue="Abre el panel desde Inicio y pulsa Evaluador. Carga un ejemplo o tus datos."/>
+        <bt:String id="Boton.Ayuda" DefaultValue="Abre el panel para armar el flujo de caja, el análisis de riesgo y el diagnóstico."/>
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+</OfficeApp>

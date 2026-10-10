@@ -1,0 +1,18 @@
+{
+  "proyecto": { "nombre": "Panadería artesanal", "caso": "Ejemplo con 3 productos", "moneda": "Bs", "n": 12, "tasa": 0.14, "iue": 0.25, "ctModo": "meses", "ct": 2, "pctVentas": 0.03 },
+  "productos": [
+    { "nombre": "Pan integral", "unidad": "bolsa", "precio": 12, "cvu": 5.5, "capacidad": 30000, "pct": [0.6, 0.7, 0.8, 0.9, 1, 1, 1, 1, 1, 1, 1, 1], "crecPrecio": 0.02 },
+    { "nombre": "Tortas", "unidad": "torta", "precio": 95, "cvu": 48, "unidades": [900, 1100, 1300, 1500, 1600, 1700, 1800, 1800, 1800, 1800, 1800, 1800] },
+    { "nombre": "Galletas", "unidad": "paquete", "precio": 8, "cvu": 3.2, "capacidad": 20000, "pct": [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1, 1, 1, 1, 1, 1] }
+  ],
+  "costosFijos": [ { "nombre": "Sueldos", "monto": 168000 }, { "nombre": "Alquiler", "monto": 36000 }, { "nombre": "Servicios", "monto": 18000 } ],
+  "otrosCostos": [0, 0, 0, 12000, 0, 0, 0, 12000, 0, 0, 0, 12000],
+  "activos": [
+    { "nombre": "Horno industrial", "valor": 85000, "vida": 10, "pctMercado": 0.15 },
+    { "nombre": "Amasadora", "valor": 32000, "vida": 8 },
+    { "nombre": "Vitrinas y mobiliario", "valor": 24000, "vida": 10, "montoMercado": 3000 },
+    { "nombre": "Vehículo de reparto", "valor": 120000, "vida": 5, "anio": 4, "pctMercado": 0.4 }
+  ],
+  "diferidos": [ { "nombre": "Estudios y licencias", "monto": 15000 } ],
+  "prestamo": { "pctInversion": 0.6, "tasa": 0.129, "tipoTasa": "nominal", "plazo": 4, "gracia": 1 }
+}

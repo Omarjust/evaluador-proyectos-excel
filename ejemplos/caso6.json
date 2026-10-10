@@ -1,0 +1,14 @@
+{
+  "proyecto": { "nombre": "Prendas de vestir", "caso": "Caso 6 (Tema 4)", "moneda": "$us", "n": 5, "tasa": 0.16, "iue": 0.25, "ctModo": "pct", "ct": 0.25 },
+  "productos": [
+    { "nombre": "Prendas", "unidad": "u", "precio": 160, "cvu": 115, "unidades": [8000, 10000, 12000, 12000, 12000] }
+  ],
+  "costosFijos": [ { "nombre": "Costo fijo anual", "monto": 250000 } ],
+  "activos": [
+    { "nombre": "Terreno", "valor": 80000 },
+    { "nombre": "Equipo A", "valor": 100000, "vida": 10, "pctMercado": 0.5 },
+    { "nombre": "Equipo B", "valor": 70000, "vida": 5, "pctMercado": 0.5 },
+    { "nombre": "Obras civiles", "valor": 90000, "vida": 20 }
+  ],
+  "prestamo": { "monto": 170000, "tasa": 0.12, "plazo": 5, "gracia": 1 }
+}
