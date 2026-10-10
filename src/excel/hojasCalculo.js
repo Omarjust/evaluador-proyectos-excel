@@ -59,7 +59,7 @@ export function hojaVentas(D) {
   h.set(`A${g}:${colLetra(n)}${g}`, [['Producto', ...Array.from({ length: n }, (_, t) => `Año ${t + 1}`)]]);
   h.set(`A${g + 1}:${colLetra(n)}${g + k}`, Array.from({ length: k }, (_, j) => [`=A${V.ing + j}`, ...Array.from({ length: n }, (_, t) => `=N(${Y(t + 1)}${V.ing + j})`)]));
   h.fmt(`B${g + 1}:${colLetra(n)}${g + k}`, { numFmt: FMT.dinero });
-  h.grafico({ tipo: 'ColumnStacked', datos: `A${g}:${colLetra(n)}${g + k}`, por: 'Rows', titulo: 'Ingresos por producto y año', pos: ['A58', 'L82'], leyenda: 'Bottom', formatoEje: FMT.dinero });
+  h.grafico({ tipo: 'ColumnStacked', datos: `A${g}:${colLetra(n)}${g + k}`, por: 'Rows', titulo: 'Ingresos por producto y año', pos: ['Z4', 'AJ24'], leyenda: 'Bottom', formatoEje: FMT.dinero });
   h.inmovilizar(V.anio, 1);
   return h;
 }

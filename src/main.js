@@ -450,6 +450,16 @@ async function cargarDatos(datos, { escribir = true } = {}) {
   S.tab = 'datos';
 }
 
+// Ajusta columnas visibles solo si cambió la vida útil o el plazo (cada escritura borra el deshacer de Excel)
+async function vistaSiCambio(forzar = false) {
+  if (!S.excel || !S.datos) return;
+  const p = S.datos.prestamo || {};
+  const clave = `${S.datos.proyecto?.n}|${p.plazo}|${p.tipoTasa}`;
+  if (!forzar && clave === S.vistaClave) return;
+  S.vistaClave = clave;
+  await P.ajustarVista(S.datos);
+}
+
 async function vigilar() {
   if (S.vigilando || !S.excel) return;
   const ok = await P.vigilarDatos(async () => {
@@ -457,6 +467,7 @@ async function vigilar() {
     if (!d) return;
     S.datos = d; recomputar();
     S.desact = true; if (S.sim) S.simDesact = true;
+    await vistaSiCambio();
     S.hist.forEach(h => { h.viejo = true; });
     render();
   });
@@ -674,6 +685,7 @@ function aplicarTema() {
         recomputar();
         S.generado = S.libro.generado;
         vigilar();
+        await vistaSiCambio(true); // por si la vida útil cambió con el panel cerrado
         if (S.R && S.generado) S.tab = 'resultados';
       }
     } catch (e) { console.warn(e); }

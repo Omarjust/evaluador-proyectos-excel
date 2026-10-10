@@ -3,6 +3,9 @@
 import { colIndice, colLetra } from './plan.js';
 import { H, NOMBRES } from './mapa.js';
 import { ORDEN } from './libro.js';
+import { PREST } from './hojasCalculo.js';
+
+const PREST_FILAS = `${PREST.ini}:${PREST.fin}`;
 
 const GENERADAS = [H.resumen, H.ventas, H.dep, H.prest, H.flujo, H.vac, H.riesgo, H.diag, H.mc];
 const BLOQUE_FILAS = 2000;
@@ -256,6 +259,29 @@ async function crearGrafico(ctx, sh, g) {
   if (g.rojos && g.rojos.length) {
     await seguro(() => { g.rojos.forEach(i => s.getItemAt(0).points.getItemAt(i).format.fill.setSolidColor('#B91C1C')); });
   }
+}
+
+// Muestra solo los años de la vida útil: vuelve a mostrar todo B:V y oculta lo que indique vista().
+// Se llama después de generar y cada vez que cambia la vida útil o el plazo del préstamo.
+export async function ajustarVista(v) {
+  return Excel.run(async ctx => {
+    const ws = ctx.workbook.worksheets;
+    ws.load('items/name');
+    await ctx.sync();
+    for (const w of ws.items) {
+      const cfg = v[w.name];
+      if (!cfg) continue;
+      if ('columnas' in cfg) {
+        w.getRange('B:V').columnHidden = false;
+        if (cfg.columnas) w.getRange(cfg.columnas).columnHidden = true;
+      }
+      if ('filas' in cfg) {
+        w.getRange(`${PREST_FILAS}`).rowHidden = false;
+        if (cfg.filas) w.getRange(cfg.filas).rowHidden = true;
+      }
+    }
+    await ctx.sync();
+  });
 }
 
 // ---------- Lectura ----------

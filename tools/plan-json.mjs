@@ -6,6 +6,7 @@ import { simular } from '../src/motor/montecarlo.js';
 import { FLUJO } from '../src/excel/hojasCalculo.js';
 import { RIESGO } from '../src/excel/hojaRiesgo.js';
 import { responder } from '../src/motor/preguntas.js';
+import { vista, periodosPrestamo } from '../src/excel/vista.js';
 
 const [, , entrada, salida, ensayos = '2000'] = process.argv;
 const datos = JSON.parse(readFileSync(entrada, 'utf8'));
@@ -16,6 +17,7 @@ writeFileSync(salida, JSON.stringify({
   hojas: hojas.map(h => ({ nombre: h.nombre, color: h.color, oculta: h.oculta, ops: h.ops })),
   motor: { puro: res(R.puro), constante: res(R.constante), cuota: res(R.cuota), n: R.n },
   filas: FLUJO.bloques, riesgo: RIESGO,
+  vista: vista(R.n, periodosPrestamo(R.D)),
   preguntas: sim ? [
     responder({ metrica: 'van', op: 'menor', a: 0 }, sim, { tasa: R.tasa, n: R.n }),
     responder({ metrica: 'tir', op: 'menor', a: 0.18 }, sim, { tasa: R.tasa, n: R.n }),

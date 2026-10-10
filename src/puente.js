@@ -8,6 +8,7 @@ import { H, DATOS as R } from './excel/mapa.js';
 import { FLUJO, VACCAE, COMPARADOR } from './excel/hojasCalculo.js';
 import { RIESGO } from './excel/hojaRiesgo.js';
 import { normalizar } from './motor/modelo.js';
+import { vista, periodosPrestamo } from './excel/vista.js';
 import { prepararSimulacion } from './motor/montecarlo.js';
 
 export const enExcel = () => X.disponible();
@@ -48,7 +49,15 @@ export async function leerPlantillaClase(nombre) {
 // Escribe solo la hoja Datos (ejemplo, plantilla vacía o importación)
 export async function escribirDatos(datos) {
   await X.escribirLibro([hojaDatos(normalizar(datos))], { parcial: true });
+  await ajustarVista(datos);
   await X.irA(H.datos, 'B5');
+}
+
+// Solo se ven los años de la vida útil (y los periodos del préstamo)
+export async function ajustarVista(D) {
+  const n = normalizar(D);
+  try { await X.ajustarVista(vista(n.proyecto.n, periodosPrestamo(n))); } catch (e) { console.warn('vista', e); }
+  return { n: n.proyecto.n, periodos: periodosPrestamo(n) };
 }
 
 // Escribe una celda de Datos (formulario del panel → hoja)
@@ -73,6 +82,7 @@ export async function generarLibro(datos, { sim, conservarDatos, progreso }) {
   const hayComp = comparador?.some((f, i) => i < 5 && f.some(v => v !== undefined));
   const libro = construirLibro(datos, { sim, incluirDatos: !conservarDatos, comparador: hayComp ? comparador : null, previas });
   await X.escribirLibro(libro.hojas, { progreso });
+  await ajustarVista(libro.D);
   return libro;
 }
 

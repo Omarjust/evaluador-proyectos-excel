@@ -37,3 +37,9 @@ test('escribirLibro recorre todas las operaciones sin errores de código', async
   assert.ok(registro.some(([k]) => k.endsWith('.formulas')));
   assert.ok(registro.some(([k]) => k.includes('charts.add()')));
 });
+
+test('ajustarVista recorre las hojas sin errores de código', async () => {
+  const { ajustarVista } = await import('../src/excel/office.js');
+  const { vista } = await import('../src/excel/vista.js');
+  await ajustarVista(vista(3, 5));
+});

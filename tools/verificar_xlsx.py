@@ -30,4 +30,15 @@ if plan['preguntas']:
     for i, p in enumerate(plan['preguntas']):
         cmp(f'pregunta {i} empírica', p['emp'], rg[f'D{q+i}'].value, 1e-9)
         cmp(f'pregunta {i} normal', p['nor'], rg[f'E{q+i}'].value, 1e-6)
+# Vista: en Flujo, la fila AÑO debe tener valor en toda columna visible de años y "" en las ocultas
+from openpyxl.utils import range_boundaries as rb
+v = plan.get('vista') or {}
+cfg = v.get('Flujo') or {}
+oc = set()
+if cfg.get('columnas'):
+    a, b = cfg['columnas'].split(':'); oc = set(range(rb(a + '1')[0], rb(b + '1')[0] + 1))
+for c in range(2, 23):
+    val = fl.cell(5, c).value
+    if c in oc and val not in (None, ''): malos += 1; print('MAL vista: año visible oculto', c, val)
+    if c not in oc and val in (None, ''): malos += 1; print('MAL vista: columna vacía visible', c)
 print('DIFERENCIAS:', malos, '· ERRORES:', len(errores))

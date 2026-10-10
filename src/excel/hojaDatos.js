@@ -10,7 +10,7 @@ export function hojaDatos(D) {
   const h = new Hoja(H.datos, { color: C.tabDatos });
   const p = D.proyecto;
   h.titulo('A1', 'EVALUACIÓN DE PROYECTOS: DATOS');
-  h.nota('A2', 'Llena solo las celdas amarillas. Todas las demás hojas se calculan solas a partir de esta.');
+  h.nota('A2', 'Llena solo las celdas amarillas. Todas las demás hojas se calculan solas a partir de esta. Solo se muestran los años de la vida útil: si la cambias con el panel cerrado, ábrelo para ver los años nuevos.');
   h.ancho('A', 230).ancho('B', 90).ancho('C:V', 70);
 
   // ---- Proyecto ----

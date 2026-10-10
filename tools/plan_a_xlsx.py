@@ -47,5 +47,17 @@ for h in plan['hojas']:
                     if f.get('wrap'): c.alignment = Alignment(wrap_text=True)
         elif t == 'nombre':
             wb.defined_names[op['nombre']] = DefinedName(op['nombre'], attr_text=op['ref'])
+# Columnas y filas ocultas (lo mismo que hace ajustarVista en Excel)
+for nombre, cfg in (plan.get('vista') or {}).items():
+    if not isinstance(cfg, dict) or nombre not in wb.sheetnames: continue
+    ws = wb[nombre]
+    if cfg.get('columnas'):
+        a, b = cfg['columnas'].split(':')
+        for c in range(range_boundaries(a + '1')[0], range_boundaries(b + '1')[0] + 1):
+            ws.column_dimensions[get_column_letter(c)].hidden = True
+    if cfg.get('filas'):
+        a, b = map(int, cfg['filas'].split(':'))
+        for r in range(a, b + 1):
+            ws.row_dimensions[r].hidden = True
 wb.save(sys.argv[2])
 print('xlsx ok')
