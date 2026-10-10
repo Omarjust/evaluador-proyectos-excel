@@ -186,6 +186,9 @@ export function responder(qCruda, sim, ctx) {
     || (q.metrica === 'bc' && q.op === 'menor' && a <= 1);
   const bueno = esTri && q.op === 'menorIgual';
   const nivel = malo ? nivelRiesgo(p) : bueno ? nivelRiesgo(1 - p) : 'info';
+  // Etiqueta del semáforo: riesgo para eventos malos; probabilidad para eventos buenos (recuperar)
+  const etiqueta = malo ? { ok: 'Riesgo bajo', warn: 'Riesgo moderado', bad: 'Riesgo alto' }[nivel]
+    : bueno ? (p >= 0.9 ? 'Muy probable' : p >= 0.6 ? 'Probable' : 'Poco probable') : null;
 
   const titulos = {
     'van-menor-0': 'Riesgo de que el proyecto no sea factible',
@@ -211,7 +214,7 @@ export function responder(qCruda, sim, ctx) {
     textos: { empirica: pct(empirica), normal: normal === null ? 'No aplica' : pct(normal) },
     frase: `Hay ${pct(p)} de probabilidad de que ${M.largo} sea ${texto}.`,
     porque: { medido, ...causaYAccion(sim, ctx, q.metrica) },
-    nivel,
+    nivel, etiqueta,
     grafico: st ? { tipo: 'histograma', metrica: q.metrica, zona } : null,
     excel: { pregunta: titulo, empirica: excelEmp, normal: esTri ? () => 'No aplica' : excelNor, formato: 'pct' },
     q, st,

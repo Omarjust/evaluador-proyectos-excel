@@ -309,7 +309,7 @@ function vistaPreguntas() {
   ${r ? (r.error ? mensaje('bad', esc(r.error)) : `
   <section class="elevada aparece" id="respuesta" aria-live="polite">
     <div><p class="muted small">${esc(r.titulo)}</p><div class="heroe">${r.principal.texto}</div><p class="small">${esc(r.frase)}</p></div>
-    ${r.nivel && r.nivel !== 'info' ? est(r.nivel, { ok: 'Riesgo bajo', warn: 'Riesgo moderado', bad: 'Riesgo alto' }[r.nivel]) : ''}
+    ${r.nivel && r.nivel !== 'info' ? est(r.nivel, r.etiqueta || { ok: 'Riesgo bajo', warn: 'Riesgo moderado', bad: 'Riesgo alto' }[r.nivel]) : ''}
     ${graficoRespuesta(r)}
     ${r.empirica !== undefined && r.normal !== undefined ? `<div class="lista">
       <div class="fila"><span class="et small">Contando ensayos</span><span class="val">${esc(r.textos?.empirica ?? pct(r.empirica))}</span></div>
