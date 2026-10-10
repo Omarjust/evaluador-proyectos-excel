@@ -4,7 +4,7 @@ import { icono, ICONO_NIVEL } from './ui/iconos.js';
 import * as G from './ui/graficos.js';
 import { calcular } from './motor/modelo.js';
 import { analizarSensibilidad, escenarios } from './motor/sensibilidad.js';
-import { responder, SUGERIDAS, METRICAS } from './motor/preguntas.js';
+import { responder, SUGERIDAS, METRICAS, redondear } from './motor/preguntas.js';
 import { recomendaciones, alertas, explicarIndicadores, planDelFlujo, reglasDelFlujo, tirOTur } from './motor/diagnostico.js';
 import { estadisticos, histograma, proporcion } from './motor/estadistica.js';
 import { validar } from './excel/leer.js';
@@ -41,7 +41,8 @@ const S = {
   ocupado: null, progreso: null, msg: null, vigilando: false,
 };
 
-const moneda = () => S.R?.D.proyecto.moneda || S.datos?.proyecto?.moneda || 'Bs';
+// La moneda viene de una celda de texto libre: se escapa siempre antes de ir al HTML
+const moneda = () => esc(String(S.R?.D.proyecto.moneda || S.datos?.proyecto?.moneda || 'Bs').slice(0, 6));
 const ctx = () => ({ tasa: S.R?.tasa ?? 0, n: S.R?.n ?? 1, moneda: moneda(), sensibilidad: S.sens });
 
 function recomputar() {
@@ -209,7 +210,13 @@ function vistaResultados() {
     filas = filaKpi('tri', 'TRI (actualizado)', a.tri === null ? 'No recupera' : `${num(a.tri, 2)} años`, a.tri === null ? 'bad' : a.tri > R.n / 2 ? 'warn' : 'ok', a.tri === null ? 'No recupera' : a.tri > R.n / 2 ? 'Lento' : 'A tiempo', x.tri, celda('tri'))
       + filaKpi('tris', 'TRI simple', a.triSimple === null ? 'No recupera' : `${num(a.triSimple, 2)} años`, null, '', null)
       + R.ventas.map((v, j) => filaKpi(`pm${j}`, `Precio mínimo ${esc(v.nombre)}`, dinero(a.precioMin[j], m, 2), null, '', j === 0 ? x.precioMin : null)).join('')
-      + (a.margenPrecio !== null ? filaKpi('mp', 'Todos los precios pueden bajar', pct(-a.margenPrecio, 1), -a.margenPrecio < 0.1 ? 'warn' : 'ok', -a.margenPrecio < 0.1 ? 'Margen corto' : 'Holgado', null) : '');
+      + (() => {
+        // Margen exacto (bisección sobre el modelo completo) del flujo puro
+        const c = S.alt === 'puro' ? S.sens?.criticos.find(x => x.clave === 'precio') : null;
+        if (!c || c.margen === null) return '';
+        const m = -c.margen;
+        return filaKpi('mp', m >= 0 ? 'Todos los precios pueden bajar' : 'Los precios deben subir', pct(Math.abs(m), 1), m < 0 ? 'bad' : m < 0.1 ? 'warn' : 'ok', m < 0 ? 'VAN negativo' : m < 0.1 ? 'Margen corto' : 'Holgado', null);
+      })();
   } else {
     filas = filaKpi('vac', 'VAC', dinero(a.vac, m), null, '', x.vac, celda('vac'))
       + filaKpi('cae', 'CAE', dinero(a.cae, m), null, '', x.vac, celda('cae'))
@@ -294,8 +301,8 @@ function vistaPreguntas() {
     ${r.nivel && r.nivel !== 'info' ? est(r.nivel, { ok: 'Riesgo bajo', warn: 'Riesgo moderado', bad: 'Riesgo alto' }[r.nivel]) : ''}
     ${graficoRespuesta(r)}
     ${r.empirica !== undefined && r.normal !== undefined ? `<div class="lista">
-      <div class="fila"><span class="et small">Contando ensayos</span><span class="val">${r.q?.op === 'seguridad' ? dinero(r.empirica, moneda()) : pct(r.empirica)}</span></div>
-      <div class="fila"><span class="et small">Normal (método del curso)</span><span class="val">${r.q?.op === 'seguridad' ? dinero(r.normal, moneda()) : pct(r.normal)}</span></div></div>` : ''}
+      <div class="fila"><span class="et small">Contando ensayos</span><span class="val">${esc(r.textos?.empirica ?? pct(r.empirica))}</span></div>
+      <div class="fila"><span class="et small">Normal (método del curso)</span><span class="val">${esc(r.textos?.normal ?? pct(r.normal))}</span></div></div>` : ''}
     <dl class="porque"><div><dt>Qué se midió</dt><dd>${esc(r.porque.medido)}</dd></div>
       ${r.porque.causa ? `<div><dt>Qué lo causa</dt><dd>${esc(r.porque.causa)}</dd></div>` : ''}
       ${r.porque.hacer ? `<div><dt>Qué hacer</dt><dd>${esc(r.porque.hacer)}</dd></div>` : ''}</dl>
@@ -431,7 +438,9 @@ async function conCarga(texto, fn) {
 
 async function cargarDatos(datos, { escribir = true } = {}) {
   S.datos = clonar(datos);
-  S.sim = null; S.simSt = null; S.resp = null; S.hist = []; S.generado = false; S.verificado = null; S.desact = false;
+  S.sim = null; S.simSt = null; S.resp = null; S.hist = []; S.verificado = null;
+  // Si ya había hojas generadas, siguen enlazadas a Datos; riesgo y diagnóstico quedan por recalcular
+  S.desact = S.generado;
   recomputar();
   if (S.excel && escribir) {
     await P.escribirDatos(S.datos);
@@ -516,6 +525,8 @@ const CELDAS = {
   'pr.plazo': `B${P.DIRS.R.fin.plazo}`, 'pr.gracia': `B${P.DIRS.R.fin.gracia}`,
 };
 const COL_PROD = { nombre: 'A', unidad: 'B', precio: 'C', crecPrecio: 'D', cvu: 'E', capacidad: 'F' };
+// Fila (0..9) del producto j en la tabla de Datos; leer.js la guarda por si hay filas vacías entre productos
+const filaProd = j => S.datos.productos[j]?.fila ?? j;
 
 async function cambiarCampo(el) {
   const c = el.dataset.campo;
@@ -526,7 +537,7 @@ async function cambiarCampo(el) {
   if (c.startsWith('q.')) {
     const k = c.slice(2);
     if (k === 'metrica') { S.q.metrica = v; S.q.a = { van: 0, vanF: 0, tir: 0.18, tirF: 0.18, tur: S.R.tasa, bc: 1, tri: Math.round(S.R.n / 2) }[v]; S.q.b = null; }
-    else if (k === 'op') { S.q.op = v; if (v === 'seguridad') S.q.a = 0.9; if (v === 'entre' && S.sim) { const st = estadisticos(S.sim[S.q.metrica]); S.q.a = Math.round(st.p25); S.q.b = Math.round(st.p75); } }
+    else if (k === 'op') { S.q.op = v; if (v === 'seguridad') S.q.a = 0.9; if (v === 'entre' && S.sim) { const st = estadisticos(S.sim[S.q.metrica]); if (st) { S.q.a = redondear(S.q.metrica, st.p25); S.q.b = redondear(S.q.metrica, st.p75); } } }
     else if (k === 'a') S.q.a = S.q.op === 'seguridad' ? Number(v) / 100 : deVista(S.q.metrica, v);
     else if (k === 'b') S.q.b = deVista(S.q.metrica, v);
     render(); return;
@@ -552,7 +563,7 @@ async function cambiarCampo(el) {
   if (c.startsWith('prod.')) {
     const [, j, k] = c.split('.');
     S.datos.productos[j][k] = v;
-    celda = `${COL_PROD[k]}${P.DIRS.R.prod.ini + Number(j)}`;
+    celda = `${COL_PROD[k]}${P.DIRS.R.prod.ini + filaProd(Number(j))}`;
   } else if (c.startsWith('pr.')) {
     const k = c.slice(3);
     S.datos.prestamo ??= {};
@@ -595,13 +606,21 @@ document.addEventListener('click', async e => {
     case 'grupo': S.grupo = el.dataset.g; S.abierto = null; render(); break;
     case 'porque': S.abierto = S.abierto === el.dataset.id ? null : el.dataset.id; render(); break;
     case 'ir': try { await P.irA(el.dataset.hoja, el.dataset.celda); } catch (err) { S.msg = { nivel: 'warn', texto: 'No encontré esa hoja. Pulsa Recalcular todo.' }; render(); } break;
-    case 'agregarProd': S.datos.productos.push({ nombre: `Producto ${S.datos.productos.length + 1}`, unidad: 'u', pct: [], unidades: [] });
-      if (S.excel && S.libro.tieneDatos) await P.escribirCelda(`A${P.DIRS.R.prod.ini + S.datos.productos.length - 1}`, `Producto ${S.datos.productos.length}`);
+    case 'agregarProd': {
+      // Primera fila libre de la tabla de productos (puede haber huecos si se borró una fila en la hoja)
+      const usadas = new Set(S.datos.productos.map((_, j) => filaProd(j)));
+      const fila = [...Array(10).keys()].find(i => !usadas.has(i));
+      if (fila === undefined) break;
+      const nombre = `Producto ${S.datos.productos.length + 1}`;
+      S.datos.productos.push({ nombre, unidad: 'u', pct: [], unidades: [], fila });
+      if (S.excel && S.libro.tieneDatos) await P.escribirCelda(`A${P.DIRS.R.prod.ini + fila}`, nombre);
       recomputar(); render(); break;
+    }
     case 'quitarProd': {
       const j = Number(el.dataset.j);
       S.datos.productos.splice(j, 1);
-      if (S.excel && S.libro.tieneDatos) await conCarga('Actualizando la hoja Datos', () => P.escribirDatos(S.datos));
+      S.datos.productos.forEach((x, i) => { x.fila = i; }); // escribirDatos los deja seguidos
+      if (S.excel && S.libro.tieneDatos) { await conCarga('Actualizando la hoja Datos', () => P.escribirDatos(S.datos)); S.desact = S.generado; }
       recomputar(); render(); break;
     }
     case 'vistaRiesgo': S.vistaRiesgo = el.dataset.v; render(); break;
@@ -619,7 +638,9 @@ document.addEventListener('click', async e => {
     case 'aHoja': await conCarga('Escribiendo la pregunta en la hoja Riesgo', async () => {
       const r = S.resp;
       const fila = (P.DIRS.RIESGO.ultPregunta ?? (P.DIRS.RIESGO.preg + (S.R.hayPrestamo ? 7 : 6))) + 1;
-      const v = [r.titulo, r.q?.a ?? '', r.q?.b ?? '', r.excel.empirica, r.excel.normal, ''];
+      // Las fórmulas apuntan a las celdas X e Y de la misma fila: si las cambias, se recalcula
+      const X_ = `B${fila}`, Y_ = `C${fila}`;
+      const v = [r.titulo, r.q?.a ?? '', r.q?.op === 'entre' ? r.q.b : '', r.excel.empirica(X_, Y_), r.excel.normal(X_, Y_), ''];
       v.formato = r.excel.formato;
       const X = await import('./excel/office.js');
       await X.agregarPregunta(fila, v);

@@ -44,5 +44,8 @@ export function seriesPrestamo(prest, sistema, n) {
   anual.forEach(f => {
     if (f.periodo <= n) { interes[f.periodo] = f.interes; amortizacion[f.periodo] = f.amortizacion; cuota[f.periodo] = f.cuota; }
   });
-  return { interes, amortizacion, cuota, plan: anual };
+  // Préstamo más largo que el proyecto: el saldo pendiente se cancela en el año n
+  const saldoN = anual.length > n ? Math.round(anual[n - 1].saldoFinal * 100) / 100 : 0;
+  if (saldoN > 0) { amortizacion[n] += saldoN; cuota[n] += saldoN; }
+  return { interes, amortizacion, cuota, plan: anual, saldoN };
 }

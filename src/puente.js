@@ -15,7 +15,8 @@ export const enExcel = () => X.disponible();
 export async function iniciarOffice() {
   if (typeof Office === 'undefined') return false;
   return new Promise(res => {
-    const t = setTimeout(() => res(false), 2500);
+    // Excel web o Mac pueden tardar en el primer arranque: se espera hasta 20 s antes de pasar a modo demostración
+    const t = setTimeout(() => res(false), 20000);
     Office.onReady(info => { clearTimeout(t); res(info.host === Office.HostType.Excel); });
   });
 }

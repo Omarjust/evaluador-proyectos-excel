@@ -28,7 +28,7 @@ export function normalizar(d = {}) {
     nombre: x.nombre || 'Activo',
     valor: n0(x.valor),
     vida: num(x.vida) && num(x.vida) > 0 ? num(x.vida) : null, // vacío = no se deprecia (terreno)
-    anio: Math.max(0, Math.min(n - 1, Math.round(n0(x.anio)))),
+    anio: Math.max(0, Math.round(n0(x.anio))), // validar() avisa si es ≥ n
     pctMercado: num(x.pctMercado),
     montoMercado: num(x.montoMercado),
   }));
@@ -110,7 +110,7 @@ export function calcular(datosCrudos, fac = null, yaNormalizado = false) {
     const valor = a.valor * fInv;
     const dep = a.vida ? valor / a.vida : 0;
     const serie = anios.map(t => (a.vida && t > a.anio && t <= a.anio + a.vida ? dep : 0));
-    const usados = a.vida ? Math.min(n - a.anio, a.vida) : 0;
+    const usados = a.vida ? Math.max(0, Math.min(n - a.anio, a.vida)) : 0;
     const libro = valor - dep * usados;
     const mercado = a.montoMercado !== null ? a.montoMercado * fInv : a.pctMercado !== null ? valor * a.pctMercado : libro;
     return { ...a, valor, depAnual: dep, serie, libro, mercado, ganancia: mercado - libro };

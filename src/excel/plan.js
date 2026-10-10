@@ -37,7 +37,19 @@ export class Hoja {
     this.ops = [];
   }
   // datos: matriz 2D; las cadenas que empiezan con "=" son fórmulas
-  set(addr, datos) { this.ops.push({ op: 'set', addr, datos: Array.isArray(datos[0]) ? datos : [datos] }); return this; }
+  set(addr, datos) {
+    const m = Array.isArray(datos[0]) ? datos : [datos];
+    // El tamaño de la matriz debe coincidir con el rango (Office.js rechaza la escritura si no)
+    const [a, b = a] = addr.split(':');
+    const p = x => /^([A-Z]+)(\d+)$/.exec(x);
+    const pa = p(a), pb = p(b);
+    if (pa && pb) {
+      const filas = Number(pb[2]) - Number(pa[2]) + 1, cols = colIndice(pb[1]) - colIndice(pa[1]) + 1;
+      if (m.length !== filas || m.some(f => f.length !== cols)) throw new Error(`${this.nombre}!${addr}: se esperaban ${filas}×${cols} y llegaron ${m.length}×${Math.max(...m.map(f => f.length))}`);
+    }
+    this.ops.push({ op: 'set', addr, datos: m });
+    return this;
+  }
   // Una sola celda
   val(addr, v) { return this.set(addr, [[v]]); }
   // Fila de fórmulas por año: fn(t, colLetra) → fórmula; escribe B..V en la fila r

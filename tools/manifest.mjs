@@ -51,7 +51,7 @@ const xml = (base, sufijo = '') => {
             <Description resid="Inicio.Descripcion"/>
             <LearnMoreUrl resid="Inicio.Url"/>
           </GetStarted>
-          <FunctionFile resid="Panel.Url"/>
+          <FunctionFile resid="Comandos.Url"/>
           <ExtensionPoint xsi:type="PrimaryCommandSurface">
             <OfficeTab id="TabHome">
               <Group id="Evaluador.Grupo">
@@ -92,6 +92,7 @@ const xml = (base, sufijo = '') => {
       <bt:Urls>
         <bt:Url id="Inicio.Url" DefaultValue="${b}"/>
         <bt:Url id="Panel.Url" DefaultValue="${b}index.html"/>
+        <bt:Url id="Comandos.Url" DefaultValue="${b}commands.html"/>
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="Inicio.Titulo" DefaultValue="Evaluador de Proyectos listo"/>

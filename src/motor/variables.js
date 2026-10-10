@@ -20,6 +20,10 @@ export function rangosActivos(datos, hayPrestamo) {
   const cfg = datos?.riesgo?.variables || {};
   return VARIABLES
     .filter(v => hayPrestamo || !v.soloFinanciado)
-    .map(v => ({ ...v, ...RANGO_DEFECTO, ...(cfg[v.clave] || {}) }))
+    .map(v => {
+      const c = { ...v, ...RANGO_DEFECTO, ...(cfg[v.clave] || {}) };
+      const min = Math.min(c.min, c.max), max = Math.max(c.min, c.max);
+      return { ...c, min, max, moda: Math.min(max, Math.max(min, c.moda)) };
+    })
     .filter(v => v.incluir !== false && v.max > v.min);
 }

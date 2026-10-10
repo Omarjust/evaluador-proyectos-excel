@@ -198,6 +198,7 @@ input[aria-invalid="true"] { border-color: var(--bad); }
 .tabla { width: 100%; border-collapse: collapse; font-size: 12px; }
 .tabla th { text-align: left; font-weight: 500; color: var(--muted); padding: 4px 6px; border-bottom: 1px solid var(--line-2); }
 .tabla td { padding: 5px 6px; border-bottom: 1px solid var(--line); }
+.tabla input[type="number"] { width: 46px !important; padding: 0 4px; }
 .tabla td.n, .tabla th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .dos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

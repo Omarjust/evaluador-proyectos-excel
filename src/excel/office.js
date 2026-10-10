@@ -1,5 +1,5 @@
 /* global Excel, Office */
-// Ejecuta el plan de hojas con Office.js (Excel Mac, Windows y web). Requiere ExcelApi 1.9.
+// Ejecuta el plan de hojas con Office.js (Excel Mac, Windows y web). Mínimo ExcelApi 1.7; lo de 1.8+ se usa solo si está disponible.
 import { colIndice, colLetra } from './plan.js';
 import { H, NOMBRES } from './mapa.js';
 import { ORDEN } from './libro.js';
@@ -30,36 +30,44 @@ export async function hojasExistentes() {
   });
 }
 
-// Escribe todas las hojas. Las hojas generadas anteriores se reemplazan (Datos solo si viene en el plan).
-// parcial: solo reemplaza las hojas del plan (no borra las demás generadas)
+// Escribe las hojas del plan. Una hoja que ya existe se LIMPIA y se reutiliza (no se borra ni se
+// renombra): así las fórmulas de otras hojas que apuntan a ella (por ejemplo 'Datos'!B8) no quedan en #REF!.
+// parcial: solo toca las hojas del plan; si no, borra además las hojas generadas que ya no hacen falta.
 export async function escribirLibro(hojas, { progreso = () => {}, parcial = false } = {}) {
   const nombres = hojas.map(h => h.nombre);
-  // 1) Renombra las hojas viejas que se van a reemplazar, crea las nuevas vacías y borra las viejas
   await Excel.run(async ctx => {
     const wb = ctx.workbook;
     const ws = wb.worksheets;
     ws.load('items/name');
     await ctx.sync();
-    const viejas = ws.items.filter(w => nombres.includes(w.name) || (!parcial && GENERADAS.includes(w.name) && w.name !== H.datos));
-    viejas.forEach((w, i) => { w.name = `_viejo_${i}_${Date.now() % 100000}`; });
-    await ctx.sync();
+    const existentes = new Map(ws.items.map(w => [w.name, w]));
     for (const h of hojas) {
-      const nueva = ws.add(h.nombre);
-      if (h.color) nueva.tabColor = h.color;
+      const w = existentes.get(h.nombre);
+      if (w) {
+        w.visibility = 'Visible';
+        w.charts.load('items');
+      } else {
+        const nueva = ws.add(h.nombre);
+        if (h.color) nueva.tabColor = h.color;
+      }
     }
     await ctx.sync();
-    viejas.forEach(w => w.delete());
-    // Nombres definidos: se recrean todos los que usa el plan
-    const defs = hojas.flatMap(h => h.ops.filter(o => o.op === 'nombre'));
-    const todos = [...new Set([...defs.map(d => d.nombre), ...Object.keys(NOMBRES)])];
-    todos.forEach(n => wb.names.getItemOrNullObject(n).delete());
-    await ctx.sync().catch(() => ctx.sync());
+    for (const h of hojas) {
+      const w = existentes.get(h.nombre);
+      if (!w) continue;
+      w.charts.items.forEach(c => c.delete());
+      const todo = w.getRange();
+      if (soporta('1.6')) todo.conditionalFormats.clearAll();
+      if (soporta('1.8')) todo.dataValidation.clear();
+      todo.clear('All');
+      w.freezePanes.unfreeze();
+      if (h.color) w.tabColor = h.color;
+    }
+    // Hojas generadas que ya no hacen falta (por ejemplo Préstamo si se quitó el préstamo)
+    if (!parcial) ws.items.filter(w => GENERADAS.includes(w.name) && !nombres.includes(w.name)).forEach(w => w.delete());
+    await ctx.sync();
   });
-  // Nombres de la hoja Datos (también cuando Datos no se regenera)
-  await Excel.run(async ctx => {
-    Object.entries(NOMBRES).forEach(([n, r]) => { try { ctx.workbook.names.add(n, `=${r}`); } catch (e) { /* ya existe */ } });
-    await ctx.sync().catch(() => {});
-  });
+  await recrearNombres(hojas);
 
   // 2) Escribe cada hoja
   let k = 0;
@@ -87,6 +95,25 @@ export async function escribirLibro(hojas, { progreso = () => {}, parcial = fals
   progreso('Listo', 1);
 }
 
+// Crea o actualiza los nombres definidos sin borrarlos (borrar un nombre deja #NAME? en las fórmulas que lo usan).
+// Uno por uno, para que un fallo no corte a los demás.
+async function recrearNombres(hojas) {
+  const defs = [...Object.entries(NOMBRES).map(([nombre, r]) => ({ nombre, ref: r })),
+    ...hojas.flatMap(h => h.ops.filter(o => o.op === 'nombre' && !NOMBRES[o.nombre]))];
+  for (const d of defs) {
+    try {
+      await Excel.run(async ctx => {
+        const item = ctx.workbook.names.getItemOrNullObject(d.nombre);
+        item.load('isNullObject');
+        await ctx.sync();
+        if (item.isNullObject) ctx.workbook.names.add(d.nombre, `=${d.ref}`);
+        else item.formula = `=${d.ref}`;
+        await ctx.sync();
+      });
+    } catch (e) { console.warn('nombre', d.nombre, e.message); }
+  }
+}
+
 async function escribirHoja(h) {
   // Escrituras grandes (por ejemplo _MC) en bloques de 2.000 filas
   const grandes = h.ops.filter(o => o.op === 'set' && o.datos.length > BLOQUE_FILAS);
@@ -103,6 +130,7 @@ async function escribirHoja(h) {
     // Alguna operación no es compatible con esta versión de Excel: se reintenta una por una
     console.warn('Reintento por operación en', h.nombre, e);
     graficos.length = 0;
+    try { await Excel.run(async ctx => { const sh = ctx.workbook.worksheets.getItem(h.nombre); if (soporta('1.6')) sh.getRange().conditionalFormats.clearAll(); await ctx.sync(); }); } catch (err) { /* sin formatos condicionales */ }
     for (const o of resto) {
       try {
         await Excel.run(async ctx => { aplicar(ctx, ctx.workbook.worksheets.getItem(h.nombre), o, graficos); await ctx.sync(); });
@@ -160,8 +188,7 @@ function aplicar(ctx, sh, o, graficos) {
       sh.getRange(cols).format.columnWidth = o.pts;
       break;
     }
-    case 'nombre':
-      if (!NOMBRES[o.nombre]) ctx.workbook.names.add(o.nombre, `=${o.ref}`); // los de Datos ya se crearon
+    case 'nombre': // se crean en recrearNombres
       break;
     case 'grafico':
       graficos.push(o.g);

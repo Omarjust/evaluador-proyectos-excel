@@ -33,6 +33,12 @@ const fmtM = (m, x, moneda) => {
   return t === 'dinero' ? dinero(x, moneda) : t === 'pct' ? pct(x) : t === 'anios' ? anios(x) : num(x, 2);
 };
 
+// Redondeo "humano" según el tipo de indicador (para valores sugeridos)
+export const redondear = (metrica, v) => {
+  const t = METRICAS[metrica]?.tipo;
+  return t === 'dinero' ? Math.round(v / 1000) * 1000 : t === 'pct' ? Math.round(v * 1000) / 1000 : t === 'num' ? Math.round(v * 100) / 100 : Math.round(v * 10) / 10;
+};
+
 // Resuelve los valores simbólicos ("tasa", "p25", "mitad") con los datos de la simulación
 export function resolverValores(q, sim, ctx) {
   const st = estadisticos(sim[q.metrica] || []);
@@ -40,8 +46,8 @@ export function resolverValores(q, sim, ctx) {
     if (typeof v === 'number') return v;
     if (v === 'tasa') return ctx.tasa;
     if (v === 'mitad') return Math.max(1, Math.round(ctx.n / 2));
-    if (v === 'p25') return st ? Math.round(st.p25 / 1000) * 1000 : 0;
-    if (v === 'p75') return st ? Math.round(st.p75 / 1000) * 1000 : 0;
+    if (v === 'p25') return st ? redondear(q.metrica, st.p25) : 0;
+    if (v === 'p75') return st ? redondear(q.metrica, st.p75) : 0;
     return v;
   };
   return { ...q, a: r(q.a), b: r(q.b) };
@@ -78,84 +84,107 @@ export function responder(qCruda, sim, ctx) {
 
   const q = resolverValores(qCruda, sim, ctx);
   const M = METRICAS[q.metrica];
-  const serie = sim[q.metrica];
-  if (!serie) return { error: `No hay datos de ${M.nombre}. ${q.metrica.endsWith('F') ? 'Agrega un préstamo en Datos.' : ''}` };
-  const st = estadisticos(serie);
-  if (!st) return { error: 'Faltan ensayos. Corre la simulación primero.' };
-  const N = serie.length;
-  const sinValor = N - st.n; // TIR que no existe o TRI que no se recupera
-  const f = x => fmtM(q.metrica, x, moneda);
+  const serieCruda = sim[q.metrica];
+  if (!serieCruda) return { error: `No hay datos de ${M.nombre}. ${q.metrica.endsWith('F') ? 'Agrega un préstamo en Datos.' : ''}` };
+  if (q.a === null || q.a === undefined || Number.isNaN(q.a) || (q.op === 'entre' && (q.b === null || q.b === undefined || Number.isNaN(q.b)))) {
+    return { error: 'Escribe el valor de la pregunta.' };
+  }
+  const esTri = q.metrica === 'tri';
+  // TRI: un ensayo que no recupera la inversión cuenta como "infinito" (nunca recupera)
+  const serie = esTri ? Array.from(serieCruda, x => (Number.isFinite(x) ? x : Infinity)) : serieCruda;
+  const st = estadisticos(serieCruda);
+  const N = serieCruda.length;
+  if (!st && !esTri) return { error: `Ningún ensayo tiene ${M.nombre}: el flujo no cambia de signo en ninguno. Usa el VAN o la TUR.` };
+  const sinValor = N - (st ? st.n : 0); // TIR que no existe o TRI que no se recupera
+  const f = x => (x === Infinity ? 'no recupera' : fmtM(q.metrica, x, moneda));
+  const nm = M.nombreMC;
+  // Denominador en Excel: para TRI todos los ensayos (ROWS); para el resto, los que tienen valor (COUNT)
+  const den = esTri ? `ROWS(${nm})` : `COUNT(${nm})`;
+  const NOR = x => `NORM.DIST(${x},AVERAGE(${nm}),STDEV.S(${nm}),TRUE)`;
 
   if (q.op === 'seguridad') {
-    const s = q.a; // "con 90 % de seguridad" → valor que se supera en el 90 % de los ensayos
-    const emp = percentil(st.ordenado, 1 - s);
-    const nor = st.media + st.sd * phiInv(1 - s);
+    const s = q.a;
+    let emp, nor, frase, medido, excel = null;
+    if (esTri) {
+      // Menos es mejor: plazo que NO se supera en s de los ensayos
+      const ord = Float64Array.from(serie).sort();
+      emp = percentil(ord, s);
+      nor = st ? st.media + st.sd * phiInv(s) : null;
+      frase = emp === Infinity || !Number.isFinite(emp)
+        ? `Con ${pct(s, 0)} de seguridad no se puede asegurar que recuperes la inversión dentro del horizonte.`
+        : `Con ${pct(s, 0)} de seguridad recuperas la inversión en a lo sumo ${f(emp)}.`;
+      medido = `Es el percentil ${num(s * 100, 0)}: en ${pct(s, 0)} de los ${num(N)} ensayos el TRI fue menor o igual a ese valor. ${sinValor ? `${num(sinValor)} ensayos no recuperan y cuentan como el peor caso.` : ''}`;
+    } else {
+      emp = percentil(st.ordenado, 1 - s);
+      nor = st.media + st.sd * phiInv(1 - s);
+      frase = `Con ${pct(s, 0)} de seguridad, ${M.largo} será de al menos ${f(nor)}.`;
+      medido = `Es el percentil ${num((1 - s) * 100, 0)} de la distribución: solo ${pct(1 - s, 0)} de los ${num(N)} ensayos quedaron por debajo. Por la normal (media ${f(st.media)}, desviación ${f(st.sd)}) da ${f(nor)}; contando ensayos da ${f(emp)}.`;
+      excel = {
+        empirica: X => `=PERCENTILE.INC(${nm},1-${X})`,
+        normal: X => `=NORM.INV(1-${X},AVERAGE(${nm}),STDEV.S(${nm}))`,
+        formato: M.tipo,
+      };
+    }
+    const principal = esTri ? emp : nor;
     return {
       titulo: `${M.nombre} con ${pct(s, 0)} de seguridad`,
-      principal: { valor: nor, texto: f(nor) },
-      empirica: emp, normal: nor, metodo: 'normal',
-      frase: `Con ${pct(s, 0)} de seguridad, ${M.largo} será de al menos ${f(nor)}.`,
-      porque: {
-        medido: `Es el percentil ${num((1 - s) * 100, 0)} de la distribución: solo ${pct(1 - s, 0)} de los ${num(N)} ensayos quedaron por debajo. Por la normal (media ${f(st.media)}, desviación ${f(st.sd)}) da ${f(nor)}; contando ensayos da ${f(emp)}.`,
-        ...causaYAccion(sim, ctx, q.metrica),
-      },
+      principal: { valor: principal, texto: f(principal) },
+      empirica: emp, normal: nor, metodo: esTri ? 'empirica' : 'normal',
+      textos: { empirica: f(emp), normal: nor === null ? 'No aplica' : f(nor) },
+      frase,
+      porque: { medido, ...causaYAccion(sim, ctx, q.metrica) },
       nivel: q.metrica.startsWith('van') ? (nor < 0 ? 'bad' : 'ok') : 'info',
-      grafico: { tipo: 'acumulada', metrica: q.metrica, marca: nor, prob: 1 - s },
-      excel: {
-        pregunta: `${M.nombre} con ${pct(s, 0)} de seguridad`,
-        empirica: `=PERCENTILE.INC(${M.nombreMC},${1 - s})`,
-        normal: `=NORM.INV(${1 - s},AVERAGE(${M.nombreMC}),STDEV.S(${M.nombreMC}))`,
-        formato: M.tipo,
-      },
+      grafico: st ? { tipo: 'acumulada', metrica: q.metrica, marca: Number.isFinite(principal) ? principal : null, prob: esTri ? s : 1 - s } : null,
+      excel,
       q, st,
     };
   }
 
   let cond, condN, texto, zona, excelEmp, excelNor;
   const a = q.a, b = q.b;
-  const nm = M.nombreMC;
-  // Para TRI, "no se recupera" cuenta como fracaso al preguntar por recuperar
-  const contarSinValorComoFalla = q.metrica === 'tri';
   switch (q.op) {
     case 'mayor':
       cond = x => x > a; texto = `mayor que ${f(a)}`; zona = { desde: a, hasta: Infinity };
       condN = () => 1 - normalMenor(a, st.media, st.sd);
-      excelEmp = `=COUNTIF(${nm},">"&${a})/COUNT(${nm})`;
-      excelNor = `=1-NORM.DIST(${a},AVERAGE(${nm}),STDEV.S(${nm}),TRUE)`;
+      excelEmp = X => (esTri ? `=(ROWS(${nm})-COUNTIF(${nm},"<="&${X}))/ROWS(${nm})` : `=COUNTIF(${nm},">"&${X})/${den}`);
+      excelNor = X => `=1-${NOR(X)}`;
       break;
     case 'entre': {
       const lo = Math.min(a, b), hi = Math.max(a, b);
       cond = x => x >= lo && x <= hi; texto = `entre ${f(lo)} y ${f(hi)}`; zona = { desde: lo, hasta: hi };
       condN = () => normalMenor(hi, st.media, st.sd) - normalMenor(lo, st.media, st.sd);
-      excelEmp = `=COUNTIFS(${nm},">="&${lo},${nm},"<="&${hi})/COUNT(${nm})`;
-      excelNor = `=NORM.DIST(${hi},AVERAGE(${nm}),STDEV.S(${nm}),TRUE)-NORM.DIST(${lo},AVERAGE(${nm}),STDEV.S(${nm}),TRUE)`;
+      excelEmp = (X, Yv) => `=COUNTIFS(${nm},">="&MIN(${X},${Yv}),${nm},"<="&MAX(${X},${Yv}))/${den}`;
+      excelNor = (X, Yv) => `=${NOR(`MAX(${X},${Yv})`)}-${NOR(`MIN(${X},${Yv})`)}`;
       break;
     }
     case 'menorIgual':
-      cond = x => x <= a; texto = q.metrica === 'tri' ? `de ${num(a)} años o menos` : `menor o igual a ${f(a)}`; zona = { desde: -Infinity, hasta: a };
+      cond = x => x <= a; texto = esTri ? `de ${num(a)} años o menos` : `menor o igual a ${f(a)}`; zona = { desde: -Infinity, hasta: a };
       condN = () => normalMenor(a, st.media, st.sd);
-      excelEmp = contarSinValorComoFalla ? `=COUNTIF(${nm},"<="&${a})/ROWS(${nm})` : `=COUNTIF(${nm},"<="&${a})/COUNT(${nm})`;
-      excelNor = `=NORM.DIST(${a},AVERAGE(${nm}),STDEV.S(${nm}),TRUE)`;
+      excelEmp = X => `=COUNTIF(${nm},"<="&${X})/${den}`;
+      excelNor = X => `=${NOR(X)}`;
       break;
     default:
       cond = x => x < a; texto = `menor que ${f(a)}`; zona = { desde: -Infinity, hasta: a };
       condN = () => normalMenor(a, st.media, st.sd);
-      excelEmp = `=COUNTIF(${nm},"<"&${a})/COUNT(${nm})`;
-      excelNor = `=NORM.DIST(${a},AVERAGE(${nm}),STDEV.S(${nm}),TRUE)`;
+      excelEmp = X => `=COUNTIF(${nm},"<"&${X})/${den}`;
+      excelNor = X => `=${NOR(X)}`;
   }
-  const pr = proporcion(serie, cond);
-  let empirica = pr.p, k = pr.k, base = pr.n;
-  if (contarSinValorComoFalla) { empirica = pr.k / N; base = N; }
-  const normal = condN();
-  // TRI con ensayos que no recuperan: la normal no aplica bien → manda la empírica
-  const metodo = q.metrica === 'tri' ? 'empirica' : 'normal';
+  // Conteo: TRI sobre todos los ensayos (los que no recuperan son infinito); el resto, sobre los que tienen valor
+  let k = 0, base = 0;
+  for (const x of serie) {
+    if (!esTri && (x === null || !Number.isFinite(x))) continue;
+    base++; if (cond(x)) k++;
+  }
+  const empirica = base ? k / base : null;
+  const normal = st ? condN() : null;
+  // TRI: la normal no representa a los que no recuperan → manda la empírica
+  const metodo = esTri ? 'empirica' : 'normal';
   const p = metodo === 'normal' ? normal : empirica;
-  const difiere = Math.abs(normal - empirica) > 0.02;
-  // ¿El evento es "malo"? (para el semáforo)
+  const difiere = normal !== null && Math.abs(normal - empirica) > 0.02;
   const malo = (q.metrica.startsWith('van') && q.op === 'menor' && a <= 0)
     || (['tir', 'tur', 'tirF'].includes(q.metrica) && q.op === 'menor')
     || (q.metrica === 'bc' && q.op === 'menor' && a <= 1);
-  const bueno = q.metrica === 'tri' && q.op === 'menorIgual';
+  const bueno = esTri && q.op === 'menorIgual';
   const nivel = malo ? nivelRiesgo(p) : bueno ? nivelRiesgo(1 - p) : 'info';
 
   const titulos = {
@@ -165,12 +194,13 @@ export function responder(qCruda, sim, ctx) {
   };
   const titulo = titulos[`${q.metrica}-${q.op}-${a}`] || `Probabilidad de que ${M.largo} sea ${texto}`;
 
-  let medido = `En ${num(k)} de ${num(base)} ensayos, ${M.largo} fue ${texto} (${pct(empirica)} contando ensayos). Con la aproximación normal del curso (media ${f(st.media)}, desviación ${f(st.sd)}) da ${pct(normal)}.`;
+  let medido = `En ${num(k)} de ${num(base)} ensayos, ${M.largo} fue ${texto} (${pct(empirica)} contando ensayos).`;
+  if (normal !== null) medido += ` Con la aproximación normal del curso (media ${f(st.media)}, desviación ${f(st.sd)}) da ${pct(normal)}.`;
   if (difiere && metodo === 'normal') {
     medido += ` Los dos métodos difieren en ${num(Math.abs(normal - empirica) * 100, 1)} puntos porque la distribución no es simétrica (asimetría ${num(st.asimetria, 2)}): la normal supone una campana perfecta.`;
   }
-  if (sinValor > 0 && q.metrica !== 'tri') medido += ` ${num(sinValor)} ensayos no tuvieron ${M.nombre} y se excluyeron.`;
-  if (q.metrica === 'tri' && sinValor > 0) medido += ` ${num(sinValor)} ensayos no recuperan la inversión dentro del horizonte y cuentan como "no recupera".`;
+  if (sinValor > 0 && !esTri) medido += ` ${num(sinValor)} ensayos no tuvieron ${M.nombre} y se excluyeron.`;
+  if (esTri && sinValor > 0) medido += ` ${num(sinValor)} ensayos no recuperan la inversión dentro del horizonte y cuentan como "no recupera".`;
   if (q.metrica === 'tir' && q.op === 'menor' && Math.abs(a - ctx.tasa) < 1e-9) medido += ' Como la tasa es la de descuento, esta probabilidad es casi igual a la de VAN negativo: describen el mismo evento.';
   if (q.metrica === 'tir' && q.op === 'menor' && a > ctx.tasa) medido += ` La meta de ${pct(a)} es más exigente que tu tasa de descuento (${pct(ctx.tasa)}), por eso este riesgo es mayor que el de VAN negativo.`;
 
@@ -178,11 +208,12 @@ export function responder(qCruda, sim, ctx) {
     titulo,
     principal: { valor: p, texto: pct(p) },
     empirica, normal, metodo, difiere, k, base,
+    textos: { empirica: pct(empirica), normal: normal === null ? 'No aplica' : pct(normal) },
     frase: `Hay ${pct(p)} de probabilidad de que ${M.largo} sea ${texto}.`,
     porque: { medido, ...causaYAccion(sim, ctx, q.metrica) },
     nivel,
-    grafico: { tipo: 'histograma', metrica: q.metrica, zona },
-    excel: { pregunta: titulo, empirica: excelEmp, normal: excelNor, formato: 'pct' },
+    grafico: st ? { tipo: 'histograma', metrica: q.metrica, zona } : null,
+    excel: { pregunta: titulo, empirica: excelEmp, normal: esTri ? () => 'No aplica' : excelNor, formato: 'pct' },
     q, st,
   };
 }

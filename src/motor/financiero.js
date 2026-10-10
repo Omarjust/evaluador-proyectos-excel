@@ -103,8 +103,12 @@ export function cae(vac, i, n) {
 
 // Comparador de alternativas (hoja "VAC y CAE" de clase)
 export function vacAlternativa({ inversion, costoAnual, vida, residual = 0, veces = 1 }, i) {
-  const vac1 = inversion + costoAnual * (1 - Math.pow(1 + i, -vida)) / i - residual / Math.pow(1 + i, vida);
   const horizonte = vida * veces;
+  if (i === 0) {
+    const vac1 = inversion + costoAnual * vida - residual;
+    return { vac1, horizonte, vacTotal: vac1 * veces, cae: vac1 / vida };
+  }
+  const vac1 = inversion + costoAnual * (1 - Math.pow(1 + i, -vida)) / i - residual / Math.pow(1 + i, vida);
   const vacTotal = vac1 * (1 - Math.pow(1 + i, -horizonte)) / (1 - Math.pow(1 + i, -vida));
   return { vac1, horizonte, vacTotal, cae: cae(vac1, i, vida) };
 }

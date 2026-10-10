@@ -37,7 +37,7 @@
             <Description resid="Inicio.Descripcion"/>
             <LearnMoreUrl resid="Inicio.Url"/>
           </GetStarted>
-          <FunctionFile resid="Panel.Url"/>
+          <FunctionFile resid="Comandos.Url"/>
           <ExtensionPoint xsi:type="PrimaryCommandSurface">
             <OfficeTab id="TabHome">
               <Group id="Evaluador.Grupo">
@@ -78,6 +78,7 @@
       <bt:Urls>
         <bt:Url id="Inicio.Url" DefaultValue="https://omarjust.github.io/evaluador-proyectos-excel/"/>
         <bt:Url id="Panel.Url" DefaultValue="https://omarjust.github.io/evaluador-proyectos-excel/index.html"/>
+        <bt:Url id="Comandos.Url" DefaultValue="https://omarjust.github.io/evaluador-proyectos-excel/commands.html"/>
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="Inicio.Titulo" DefaultValue="Evaluador de Proyectos listo"/>

@@ -76,7 +76,7 @@ export function explicarIndicadores(R, altKey = 'puro') {
     },
     precioMin: {
       que: 'El precio mínimo es el precio de venta que deja el VAN exactamente en 0, con todo lo demás igual.',
-      como: `Precio mínimo = precio − VAN / ((1 − IUE) × Σ unidades × factor de actualización).`,
+      como: `Precio mínimo = precio − VAN / ((1 − IUE) × Σ unidades × factor de actualización). Es la fórmula lineal de la plantilla de clase: es exacta si ningún año tiene pérdida y no hay costos como % de ventas.`,
       significa: R.ventas.map((v, j) => `${v.nombre}: ${dinero(a.precioMin[j], m, 2)} (hoy ${dinero(R.D.productos[j].precio, m, 2)}).`).join(' '),
     },
     vac: {
@@ -140,7 +140,7 @@ export function recomendaciones(R, sim = null) {
       ],
     });
     if (R.D.prestamo.plazo > R.n) {
-      out.push({ id: 'plazo', nivel: 'warn', titulo: 'El préstamo dura más que el proyecto', resumen: `Plazo ${R.D.prestamo.plazo} años, proyecto ${R.n} años.`, porque: ['Las cuotas posteriores al último año no entran en el flujo. Ajusta el plazo o suma el saldo pendiente en el año n.'] });
+      out.push({ id: 'plazo', nivel: 'warn', titulo: 'El préstamo dura más que el proyecto', resumen: `Plazo ${R.D.prestamo.plazo} años, proyecto ${R.n} años.`, porque: [`El saldo pendiente al cierre del año ${R.n} se paga completo ese año (va en "Amortización (-)"). Si no es lo que dice el enunciado, ajusta el plazo.`] });
     }
   }
 

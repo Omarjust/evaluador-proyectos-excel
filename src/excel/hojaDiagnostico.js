@@ -21,15 +21,15 @@ export function hojaDiagnostico({ R, recs, alertas, plan, reglas, tt, hayMC, fec
   const usar = tt.usar === 'TUR' ? b.tur : b.tir;
   const filas = [
     ['VAN del flujo puro', `=${F('Y' + b.van)}`, 0, '=IF(B6>=C6,"Conviene","No conviene")',
-      `="El proyecto "&IF(B6>=0,"deja ","pierde ")&TEXT(ABS(B6),"#,##0")&" en valor presente a la tasa de "&TEXT(TasaDesc,"0.00%")&"."`],
+      `="El proyecto "&IF(B6>=0,"deja ","pierde ")&FIXED(ABS(B6),0)&" en valor presente a la tasa de "&FIXED(TasaDesc*100,2)&" %"&"."`],
     [`Rentabilidad recomendada (${tt.usar})`, `=${F('Y' + usar)}`, '=TasaDesc', '=IF(ISNUMBER(B7),IF(B7>C7,"Conviene","No conviene"),"No existe")', tt.razones[0]],
     ['Relación beneficio / costo', `=${F('Y' + b.bc)}`, 1, '=IF(ISNUMBER(B8),IF(B8>=C8,"Conviene","No conviene"),"No existe")',
-      '="Por cada 1 invertido se recibe "&TEXT(B8,"0.00")&" en valor presente."'],
+      '="Por cada 1 invertido se recibe "&FIXED(B8,2)&" en valor presente."'],
     ['Tiempo de recuperación (años)', `=${F('Y' + b.tri)}`, '=VidaProy/2', '=IF(ISNUMBER(B9),IF(B9<=C9,"Bien","Ajustado"),"No recupera")',
-      '=IF(ISNUMBER(B9),"Recuperas la inversión en "&TEXT(B9,"0.00")&" años de "&VidaProy&".","El flujo actualizado acumulado no llega a 0.")'],
+      '=IF(ISNUMBER(B9),"Recuperas la inversión en "&FIXED(B9,2)&" años de "&VidaProy&".","El flujo actualizado acumulado no llega a 0.")'],
   ];
   if (hayMC) filas.push(['Riesgo de que no sea factible P(VAN < 0)', `=${ref(H.riesgo, 'E' + RIESGO.preg)}`, 0.1,
-    '=IF(B10<=0.1,"Bajo",IF(B10<=0.3,"Moderado","Alto"))', '="Probabilidad con la aproximación normal sobre "&TEXT(ROWS(MC_VAN),"#,##0")&" ensayos."']);
+    '=IF(B10<=0.1,"Bajo",IF(B10<=0.3,"Moderado","Alto"))', '="Probabilidad con la aproximación normal sobre "&FIXED(ROWS(MC_VAN),0)&" ensayos."']);
   const ult = 5 + filas.length;
   h.set(`A6:E${ult}`, filas);
   h.fmt(`A6:E${ult}`, { borde: true, wrap: true });
@@ -51,7 +51,7 @@ export function hojaDiagnostico({ R, recs, alertas, plan, reglas, tt, hayMC, fec
     r += filasT.length + 1;
     return ini;
   };
-  const NIV = { ok: 'Bien', warn: 'Ajustado', bad: 'No conviene', info: 'Nota' };
+  const NIV = { ok: 'Bien', warn: 'Ajustado', bad: 'No conviene', info: 'Info' };
   const iniRec = bloqueTexto('RECOMENDACIONES (con su porqué)', ['Recomendación', 'Resumen', '', 'Estado', 'Por qué'],
     recs.map(x => [x.titulo, x.resumen, '', NIV[x.nivel], x.porque.join(' ')]));
   if (iniRec) h.semaforo(`D${iniRec}:D${iniRec + recs.length - 1}`, SEM);

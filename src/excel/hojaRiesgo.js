@@ -128,18 +128,20 @@ export function hojaRiesgo({ R, sens, esc, sim, previas = {}, fecha, moneda }) {
   h.set(`A${q - 1}:F${q - 1}`, [['Pregunta', 'Valor X', 'Valor Y', 'Probabilidad (contando ensayos)', 'Probabilidad (normal, método del curso)', 'Lectura']]);
   h.encabezado(`A${q - 1}:F${q - 1}`);
   const N_ = (m, x) => `NORM.DIST(${x},AVERAGE(${m}),STDEV.S(${m}),TRUE)`;
-  const riesgoTxt = c => `=IF(${c}="","",IF(${c}<=0.1,"Riesgo bajo",IF(${c}<=0.3,"Riesgo moderado","Riesgo alto")))`;
+  const riesgoTxt = c => `=IF(NOT(ISNUMBER(${c})),"",IF(${c}<=0.1,"Riesgo bajo",IF(${c}<=0.3,"Riesgo moderado","Riesgo alto")))`;
   const preguntas = [
     ['¿Riesgo de que el proyecto no sea factible? P(VAN < X)', pv(q, 'B', 0), '', `=COUNTIF(MC_VAN,"<"&B${q})/COUNT(MC_VAN)`, `=${N_('MC_VAN', `B${q}`)}`, riesgoTxt(`E${q}`)],
     ['¿Riesgo de que la rentabilidad (TIR) sea menor a X?', pv(q + 1, 'B', 0.18), '', `=COUNTIF(MC_TIR,"<"&B${q + 1})/COUNT(MC_TIR)`, `=${N_('MC_TIR', `B${q + 1}`)}`, riesgoTxt(`E${q + 1}`)],
-    ['¿Probabilidad de que el VAN esté entre X e Y?', pv(q + 2, 'B', previas.x ?? 0), pv(q + 2, 'C', previas.y ?? 0), `=COUNTIFS(MC_VAN,">="&B${q + 2},MC_VAN,"<="&C${q + 2})/COUNT(MC_VAN)`, `=${N_('MC_VAN', `C${q + 2}`)}-${N_('MC_VAN', `B${q + 2}`)}`, `=TEXT(E${q + 2},"0.0%")&" de probabilidad"`],
-    ['¿Probabilidad de que el VAN supere X?', pv(q + 3, 'B', previas.meta ?? 0), '', `=COUNTIF(MC_VAN,">"&B${q + 3})/COUNT(MC_VAN)`, `=1-${N_('MC_VAN', `B${q + 3}`)}`, `=TEXT(E${q + 3},"0.0%")&" de probabilidad"`],
+    ['¿Probabilidad de que el VAN esté entre X e Y?', pv(q + 2, 'B', previas.x ?? 0), pv(q + 2, 'C', previas.y ?? 0), `=COUNTIFS(MC_VAN,">="&B${q + 2},MC_VAN,"<="&C${q + 2})/COUNT(MC_VAN)`, `=${N_('MC_VAN', `C${q + 2}`)}-${N_('MC_VAN', `B${q + 2}`)}`, `=IFERROR(FIXED(E${q + 2}*100,1)&" % de probabilidad","")`],
+    ['¿Probabilidad de que el VAN supere X?', pv(q + 3, 'B', previas.meta ?? 0), '', `=COUNTIF(MC_VAN,">"&B${q + 3})/COUNT(MC_VAN)`, `=1-${N_('MC_VAN', `B${q + 3}`)}`, `=IFERROR(FIXED(E${q + 3}*100,1)&" % de probabilidad","")`],
     ['¿Riesgo de que B/C sea menor a X?', pv(q + 4, 'B', 1), '', `=COUNTIF(MC_BC,"<"&B${q + 4})/COUNT(MC_BC)`, `=${N_('MC_BC', `B${q + 4}`)}`, riesgoTxt(`E${q + 4}`)],
     ['¿Probabilidad de recuperar la inversión en X años o menos?', pv(q + 5, 'B', Math.max(1, Math.round(R.n / 2))), '', `=COUNTIF(MC_TRI,"<="&B${q + 5})/ROWS(MC_TRI)`, 'No aplica', `=IF(D${q + 5}>=0.9,"Muy probable",IF(D${q + 5}>=0.6,"Probable","Poco probable"))`],
-    ['VAN que se alcanza con X de seguridad', pv(q + 6, 'B', 0.9), '', `=PERCENTILE.INC(MC_VAN,1-B${q + 6})`, `=NORM.INV(1-B${q + 6},AVERAGE(MC_VAN),STDEV.S(MC_VAN))`, `="En el "&TEXT(B${q + 6},"0%")&" de los ensayos el VAN es mayor"`],
+    ['VAN que se alcanza con X de seguridad', pv(q + 6, 'B', 0.9), '', `=PERCENTILE.INC(MC_VAN,1-B${q + 6})`, `=NORM.INV(1-B${q + 6},AVERAGE(MC_VAN),STDEV.S(MC_VAN))`, `="En el "&FIXED(B${q + 6}*100,0)&" % de los ensayos el VAN es mayor"`],
   ];
   if (sim.vanF) preguntas.push(['¿Riesgo de que el proyecto financiado no sea factible? P(VAN financiado < X)', pv(q + 7, 'B', 0), '', `=COUNTIF(MC_VANF,"<"&B${q + 7})/COUNT(MC_VANF)`, `=${N_('MC_VANF', `B${q + 7}`)}`, riesgoTxt(`E${q + 7}`)]);
   const ult = q + preguntas.length - 1;
+  // Sin ensayos válidos (por ejemplo ninguna TIR) o sin variación: "s/d" en vez de #DIV/0! o #VALUE!
+  preguntas.forEach(f => [3, 4].forEach(k => { if (typeof f[k] === 'string' && f[k].startsWith('=')) f[k] = `=IFERROR(${f[k].slice(1)},"s/d")`; }));
   h.set(`A${q}:F${ult}`, preguntas);
   h.fmt(`A${q}:F${ult}`, { borde: true, wrap: true });
   h.entrada(`B${q}:B${ult}`);
@@ -170,7 +172,7 @@ export function hojaRiesgo({ R, sens, esc, sim, previas = {}, fecha, moneda }) {
     const r = g + i;
     const ultimo = i === 24;
     filasH.push([
-      `=TEXT((C${r}+D${r})/2,"#,##0")`,
+      `=FIXED((C${r}+D${r})/2,0)`,
       `=E${r}/COUNT(MC_VAN)`,
       i === 0 ? '=MIN(MC_VAN)' : `=D${r - 1}`,
       `=C${r}+$I$${g - 1}`,

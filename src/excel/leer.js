@@ -18,6 +18,7 @@ export function parsearDatos(vals) {
     const nombre = String(c(r, 0) || '').trim();
     if (!nombre && num(c(r, 2)) === null) continue;
     productos.push({
+      fila: j, // posición real en la tabla (puede haber filas vacías entre productos)
       nombre: nombre || `Producto ${j + 1}`,
       unidad: String(c(r, 1) || 'u'),
       precio: num(c(r, 2)), crecPrecio: num(c(r, 3)) ?? 0, cvu: num(c(r, 4)) ?? 0, capacidad: num(c(r, 5)),
@@ -44,7 +45,7 @@ export function parsearDatos(vals) {
   });
   return {
     proyecto: {
-      nombre: String(c(R.nombre, 1) || ''), caso: String(c(R.caso, 1) || ''), moneda: String(c(R.moneda, 1) || 'Bs'),
+      nombre: String(c(R.nombre, 1) || ''), caso: String(c(R.caso, 1) || ''), moneda: String(c(R.moneda, 1) || 'Bs').replace(/[<>&"']/g, '').slice(0, 6) || 'Bs',
       n, tasa: num(c(R.tasa, 1)), iue: num(c(R.iue, 1)) ?? 0,
       ctModo: c(R.ctModo, 1) === MODOS_CT[1] ? 'meses' : 'pct', ct: num(c(R.ct, 1)) ?? 0, pctVentas: num(c(R.pctVentas, 1)) ?? 0,
     },
@@ -69,19 +70,23 @@ export function validar(d) {
   else if (p.tasa > 1) avisos.push({ campo: 'tasa', fila: R.tasa, texto: `La tasa de descuento es ${p.tasa}: escríbela como porcentaje (por ejemplo 13 %), no como 13.` });
   if (!d.productos?.length) errores.push({ campo: 'productos', fila: R.prod.ini, texto: 'Agrega al menos un producto con su precio.' });
   (d.productos || []).forEach((x, j) => {
-    if (x.precio === null) errores.push({ campo: 'productos', fila: R.prod.ini + j, texto: `${x.nombre}: falta el precio.` });
+    if (x.precio === null || x.precio === undefined) errores.push({ campo: 'productos', fila: R.prod.ini + j, texto: `${x.nombre}: falta el precio.` });
     const tieneCant = (x.unidades || []).some(u => u !== null) || (x.capacidad && (x.pct || []).some(u => u !== null));
     if (!tieneCant) errores.push({ campo: 'productos', fila: R.pct.ini + j, texto: `${x.nombre}: faltan las cantidades por año (unidades, o capacidad y %).` });
     if (x.precio !== null && x.cvu >= x.precio) avisos.push({ campo: 'productos', fila: R.prod.ini + j, texto: `${x.nombre}: el costo variable (${x.cvu}) es mayor o igual al precio (${x.precio}).` });
   });
   if (!d.activos?.length && !d.diferidos?.length) avisos.push({ campo: 'activos', fila: R.act.ini, texto: 'No hay inversión en activos: el VAN, la TIR y el B/C pierden sentido.' });
   (d.activos || []).forEach((a, j) => {
+    if (p.n && (a.anio || 0) >= p.n) errores.push({ campo: 'activos', fila: R.act.ini + j, texto: `"${a.nombre}" se compra en el año ${a.anio}, pero el proyecto dura ${p.n} años: debe comprarse antes del año ${p.n}.` });
     if (/terreno/i.test(a.nombre) && a.vida) avisos.push({ campo: 'activos', fila: R.act.ini + j, texto: `"${a.nombre}" tiene vida útil: el terreno no se deprecia, deja la vida útil vacía.` });
   });
   const pr = d.prestamo || {};
   if ((pr.monto || pr.pctInversion) && !pr.plazo) errores.push({ campo: 'prestamo', fila: R.fin.plazo, texto: 'El préstamo no tiene plazo.' });
   if (pr.plazo && pr.gracia >= pr.plazo) errores.push({ campo: 'prestamo', fila: R.fin.gracia, texto: 'Los años de gracia deben ser menos que el plazo total.' });
   if (pr.tasa > 1) avisos.push({ campo: 'prestamo', fila: R.fin.tasa, texto: 'La tasa del préstamo parece escrita como número entero: usa porcentaje (12 %).' });
+  Object.entries(d.riesgo?.variables || {}).forEach(([k, v]) => {
+    if (v.incluir !== false && !(v.min <= v.moda && v.moda <= v.max)) avisos.push({ campo: 'riesgo', fila: R.riesgo.ini, texto: `Rango de riesgo de ${k}: el más probable debe estar entre el mínimo y el máximo.` });
+  });
   return { errores, avisos };
 }
 

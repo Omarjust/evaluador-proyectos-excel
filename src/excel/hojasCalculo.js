@@ -86,7 +86,7 @@ export function hojaDepreciacion() {
       `=IF(C${r}="",0,B${r}/C${r})`,
       `=IF(C${r}="",0,MAX(0,MIN(VidaProy-D${r},C${r})))`,
       `=B${r}-E${r}*F${r}`,
-      `=IF(A${r}="",0,IF(${DT('F' + d)}<>"",N(${DT('F' + d)}),IF(${DT('E' + d)}<>"",B${r}*${DT('E' + d)},G${r})))`,
+      `=IF(B${r}=0,0,IF(${DT('F' + d)}<>"",N(${DT('F' + d)}),IF(${DT('E' + d)}<>"",B${r}*${DT('E' + d)},G${r})))`,
       `=H${r}-G${r}`,
     ];
   });
@@ -183,17 +183,20 @@ export function hojaPrestamo() {
   tabla('I', 'CUOTA FIJA (FRANCÉS)', true);
 
   h.seccion(`Q${P.enc - 1}`, 'RESUMEN POR AÑO (va al flujo de caja)');
-  h.set(`Q${P.enc}:W${P.enc}`, [['Año', 'Interés (amort. constante)', 'Amortización (amort. constante)', 'Cuota (amort. constante)', 'Interés (cuota fija)', 'Amortización (cuota fija)', 'Cuota (cuota fija)']]);
-  h.encabezado(`Q${P.enc}:W${P.enc}`);
+  h.set(`Q${P.enc}:Y${P.enc}`, [['Año', 'Interés (amort. constante)', 'Amortización (amort. constante)', 'Cuota (amort. constante)', 'Interés (cuota fija)', 'Amortización (cuota fija)', 'Cuota (cuota fija)', 'Saldo al cierre (amort. constante)', 'Saldo al cierre (cuota fija)']]);
+  h.encabezado(`Q${P.enc}:Y${P.enc}`);
   const rg = col => `$${col}$${P.ini}:$${col}$${P.fin}`;
-  h.set(`Q${P.res}:W${P.resFin}`, Array.from({ length: 20 }, (_, k) => {
+  h.set(`Q${P.res}:Y${P.resFin}`, Array.from({ length: 20 }, (_, k) => {
     const r = P.res + k;
     return [k + 1,
       `=SUMIF(${rg('B')},$Q${r},${rg('E')})`, `=SUMIF(${rg('B')},$Q${r},${rg('D')})`, `=SUMIF(${rg('B')},$Q${r},${rg('F')})`,
-      `=SUMIF(${rg('J')},$Q${r},${rg('M')})`, `=SUMIF(${rg('J')},$Q${r},${rg('L')})`, `=SUMIF(${rg('J')},$Q${r},${rg('N')})`];
+      `=SUMIF(${rg('J')},$Q${r},${rg('M')})`, `=SUMIF(${rg('J')},$Q${r},${rg('L')})`, `=SUMIF(${rg('J')},$Q${r},${rg('N')})`,
+      `=ROUND($B$${P.monto}-SUM($S$${P.res}:S${r}),2)`, `=ROUND($B$${P.monto}-SUM($V$${P.res}:V${r}),2)`];
   }));
   h.set(`Q${P.resTotal}:W${P.resTotal}`, [['TOTAL', ...'RSTUVW'.split('').map(c => `=SUM(${c}${P.res}:${c}${P.resFin})`)]]);
   h.fmt(`R${P.res}:W${P.resTotal}`, { numFmt: FMT.dinero, borde: true });
+  h.fmt(`X${P.res}:Y${P.resFin}`, { numFmt: FMT.dinero, borde: true });
+  h.nota(`Q${P.resTotal + 1}`, 'Si el plazo es mayor que la vida del proyecto, el saldo al cierre del último año se paga en ese año (va en "Amortización (-)").');
   h.totalFila(`Q${P.resTotal}:W${P.resTotal}`);
   h.inmovilizar(P.enc, 0);
   return h;
@@ -225,8 +228,8 @@ AUX.forEach(([k], i) => { FLUJO.aux[k] = 6 + i; });
 
 const ALT = {
   puro: { titulo: 'FLUJO DE CAJA DEL PROYECTO PURO (SIN FINANCIAMIENTO)', inicio: 23, nombre: 'Flujo puro' },
-  constante: { titulo: 'FLUJO DE CAJA CON FINANCIAMIENTO: AMORTIZACIÓN CONSTANTE', inicio: 55, nombre: 'Financ. amortización constante', colInt: 'R', colAm: 'S' },
-  cuota: { titulo: 'FLUJO DE CAJA CON FINANCIAMIENTO: CUOTA FIJA', inicio: 88, nombre: 'Financ. cuota fija', colInt: 'U', colAm: 'V' },
+  constante: { titulo: 'FLUJO DE CAJA CON FINANCIAMIENTO: AMORTIZACIÓN CONSTANTE', inicio: 55, nombre: 'Financ. amortización constante', colInt: 'R', colAm: 'S', colSaldo: 'X' },
+  cuota: { titulo: 'FLUJO DE CAJA CON FINANCIAMIENTO: CUOTA FIJA', inicio: 88, nombre: 'Financ. cuota fija', colInt: 'U', colAm: 'V', colSaldo: 'Y' },
 };
 export const BASE_PMIN = 121;
 
@@ -248,7 +251,7 @@ function bloqueFlujo(h, key) {
   add('amd', 'Amortización de diferidos', (t, c) => `${c}${a.amd}`);
   add('tcos', 'TOTAL COSTOS', null, 'sub');
   add('ug', 'UTILIDAD GRAVABLE', null, 'sub');
-  add('iue', '="IUE ("&TEXT(TasaIUE,"0%")&" ANUAL)"', null);
+  add('iue', '="IUE ("&FIXED(TasaIUE*100,0)&" % ANUAL)"', null);
   add('un', 'UTILIDAD NETA', null, 'sub');
   add('dep2', 'Depreciaciones (+)', null);
   add('amd2', 'Amortización de diferidos (+)', null);
@@ -258,7 +261,8 @@ function bloqueFlujo(h, key) {
   add('ct', 'Capital de trabajo (-)', (t, c) => `-${c}${a.ctInv}`);
   if (fin) {
     add('pres', 'Préstamo (+)', (t, c) => `IF(${c}$5=0,MontoPrestamo,0)`);
-    add('am', 'Amortización (-)', (t, c) => `-${prest(A.colAm)(t, c)}`);
+    // Si el préstamo dura más que el proyecto, el saldo pendiente se cancela en el año n
+    add('am', 'Amortización (-)', (t, c) => (t === 0 ? '0' : `-(${prest(A.colAm)(t, c)}+IF(${c}$5=VidaProy,${prest(A.colSaldo)(t, c)},0))`));
   }
   add('fc', 'FLUJO DE CAJA', null, 'total');
   add('fa', 'Factor de actualización', (t, c) => `1/(1+TasaDesc)^${c}$5`);
@@ -430,8 +434,8 @@ export function hojaVacCae(hayPrestamo, comparador = null) {
     const prest = col => (t, c) => (t === 0 ? '0' : `IFERROR(INDEX('${H.prest}'!$${col}$${PREST.res}:$${col}$${PREST.resFin},${c}$${V.anio}),0)`);
     filas.push(
       ['Préstamo recibido (-)', (t, c) => `IF(${c}$${V.anio}=0,-MontoPrestamo,0)`],
-      ['Cuota del préstamo (amortización constante)', prest('T')],
-      ['Cuota del préstamo (cuota fija)', prest('W')],
+      ['Cuota del préstamo (amortización constante)', (t, c) => (t === 0 ? '0' : `${prest('T')(t, c)}+IF(${c}$${V.anio}=VidaProy,${prest('X')(t, c)},0)`)],
+      ['Cuota del préstamo (cuota fija)', (t, c) => (t === 0 ? '0' : `${prest('W')(t, c)}+IF(${c}$${V.anio}=VidaProy,${prest('Y')(t, c)},0)`)],
       ['COSTO NETO: FINANC. AMORTIZACIÓN CONSTANTE', (t, c) => `${c}9+${c}10+${c}11`],
       ['COSTO NETO: FINANC. CUOTA FIJA', (t, c) => `${c}9+${c}10+${c}12`],
     );
@@ -448,7 +452,7 @@ export function hojaVacCae(hayPrestamo, comparador = null) {
   if (hayPrestamo) h.totalFila('A13:V14');
 
   const vacDe = fila => `=NPV(TasaDesc,C${fila}:V${fila})+B${fila}`;
-  const caeDe = r => `=Y${r}*(TasaDesc*(1+TasaDesc)^VidaProy)/((1+TasaDesc)^VidaProy-1)`;
+  const caeDe = r => `=IF(TasaDesc=0,Y${r}/VidaProy,Y${r}*(TasaDesc*(1+TasaDesc)^VidaProy)/((1+TasaDesc)^VidaProy-1))`;
   h.set('X5:Y5', [['RESULTADO', '']]);
   h.encabezado('X5:Y5');
   const res = [['VAC puro', vacDe(9)], ['CAE puro', caeDe(V.res.puro)]];
@@ -485,9 +489,9 @@ export function hojaVacCae(hayPrestamo, comparador = null) {
   h.set(`A${q}:E${q + 5}`, [
     ['Resultado', ...col.map(c => `=${c}${R2(1)}&""`)],
     ['Horizonte total (años)', ...col.map(c => fc(c, `${c}${R2(4)}*${c}${R2(6)}`))],
-    ['VAC (un ciclo)', ...col.map(c => fc(c, `${c}${R2(2)}+${c}${R2(3)}*(1-(1+${c}${R2(7)})^(-${c}${R2(4)}))/${c}${R2(7)}-${c}${R2(5)}/(1+${c}${R2(7)})^${c}${R2(4)}`))],
-    ['VAC (horizonte total)', ...col.map(c => fc(c, `${c}${q + 2}*(1-(1+${c}${R2(7)})^(-${c}${q + 1}))/(1-(1+${c}${R2(7)})^(-${c}${R2(4)}))`))],
-    ['CAE', ...col.map(c => fc(c, `${c}${q + 2}*(${c}${R2(7)}*(1+${c}${R2(7)})^${c}${R2(4)})/((1+${c}${R2(7)})^${c}${R2(4)}-1)`))],
+    ['VAC (un ciclo)', ...col.map(c => fc(c, `IF(${c}${R2(7)}=0,${c}${R2(2)}+${c}${R2(3)}*${c}${R2(4)}-${c}${R2(5)},${c}${R2(2)}+${c}${R2(3)}*(1-(1+${c}${R2(7)})^(-${c}${R2(4)}))/${c}${R2(7)}-${c}${R2(5)}/(1+${c}${R2(7)})^${c}${R2(4)})`))],
+    ['VAC (horizonte total)', ...col.map(c => fc(c, `IF(${c}${R2(7)}=0,${c}${q + 2}*${c}${R2(6)},${c}${q + 2}*(1-(1+${c}${R2(7)})^(-${c}${q + 1}))/(1-(1+${c}${R2(7)})^(-${c}${R2(4)})))`))],
+    ['CAE', ...col.map(c => fc(c, `IF(${c}${R2(7)}=0,${c}${q + 2}/${c}${R2(4)},${c}${q + 2}*(${c}${R2(7)}*(1+${c}${R2(7)})^${c}${R2(4)})/((1+${c}${R2(7)})^${c}${R2(4)}-1))`))],
     ['Decisión', ...col.map(c => fc(c, `IF(${c}${q + 4}=MIN($B$${q + 4}:$E$${q + 4}),"CONVIENE","")`))],
   ]);
   h.encabezado(`A${q}:E${q}`);

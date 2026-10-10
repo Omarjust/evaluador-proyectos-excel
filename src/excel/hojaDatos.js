@@ -108,7 +108,7 @@ export function hojaDatos(D) {
   h.fmt(`B${A.ini}:B${A.fin}`, { numFmt: FMT.dinero });
   h.fmt(`E${A.ini}:E${A.fin}`, { numFmt: FMT.pct0 });
   h.fmt(`F${A.ini}:F${A.fin}`, { numFmt: FMT.dinero });
-  h.validacion(`D${A.ini}:D${A.fin}`, { entero: [0, 19], aviso: 'Año en que se compra el activo. Vacío o 0 = al inicio.' });
+  h.validacion(`D${A.ini}:D${A.fin}`, { entero: [0, '=VidaProy-1'], aviso: 'Año en que se compra el activo (antes del último año). Vacío o 0 = al inicio.' });
 
   // ---- Diferidos ----
   const DF = R.dif;
