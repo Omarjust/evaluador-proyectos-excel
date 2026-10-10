@@ -38,10 +38,12 @@ const S = {
   sim: null, simEst: null, simCtl: null, simDesact: false, ensayos: 10000, semilla: 2026, simSt: null,
   vistaRiesgo: 'preguntas', tema: 'Factibilidad',
   q: { metrica: 'van', op: 'menor', a: 0, b: null }, resp: null, hist: [],
-  ocupado: null, progreso: null, msg: null, vigilando: false,
+  ocupado: null, progreso: null, msg: null, vigilando: false, foco: null, acc: {}, mostrar: null,
 };
 
 // La moneda viene de una celda de texto libre: se escapa siempre antes de ir al HTML
+// Un solo criterio para el margen hasta el punto crítico (Resultados y Sensibilidad)
+const margenNivel = m => (m < 0 ? ['bad', 'VAN negativo'] : m < 0.1 ? ['bad', 'Corto'] : m < 0.25 ? ['warn', 'Medio'] : ['ok', 'Holgado']);
 const moneda = () => esc(String(S.R?.D.proyecto.moneda || S.datos?.proyecto?.moneda || 'Bs').slice(0, 6));
 const ctx = () => ({ tasa: S.R?.tasa ?? 0, n: S.R?.n ?? 1, moneda: moneda(), sensibilidad: S.sens });
 
@@ -128,11 +130,11 @@ function vistaDatos() {
   const errDe = c => S.val.errores.find(e => e.campo === c)?.texto || '';
   const total = S.val.errores.length + S.val.avisos.length;
   const resumenErr = total
-    ? `<details class="acc" ${S.val.errores.length ? 'open' : ''}><summary>${icono(S.val.errores.length ? 'x-circle' : 'warning')}${S.val.errores.length ? `${S.val.errores.length} por completar` : `${S.val.avisos.length} por revisar`}<span class="chev">${icono('caret-right')}</span></summary>
+    ? `<details class="acc" data-acc="validacion" ${S.val.errores.length ? 'open' : ''}><summary>${icono(S.val.errores.length ? 'x-circle' : 'warning')}${S.val.errores.length ? `${S.val.errores.length} por completar` : `${S.val.avisos.length} por revisar`}<span class="chev">${icono('caret-right')}</span></summary>
       <div class="cuerpo">${[...S.val.errores.map(e => ['bad', e]), ...S.val.avisos.map(e => ['warn', e])].map(([n, e]) => mensaje(n, esc(e.texto), S.excel && S.libro.tieneDatos ? ` ${ir(P.DIRS.H.datos, `A${e.fila}`, 'Ir a la celda')}` : '')).join('')}</div></details>`
     : mensaje('ok', 'Datos completos.');
   const prods = (d.productos || []).map((x, j) => `
-    <details class="acc" ${j === 0 && (d.productos || []).length === 1 ? 'open' : ''}><summary>${esc(x.nombre || `Producto ${j + 1}`)}<span class="muted small num" style="margin-left:auto">${x.precio !== null && x.precio !== undefined ? dinero(x.precio, moneda(), 2) : 'sin precio'}</span><span class="chev" style="margin-left:6px">${icono('caret-right')}</span></summary>
+    <details class="acc" data-acc="prod${j}" ${j === 0 && (d.productos || []).length === 1 ? 'open' : ''}><summary>${esc(x.nombre || `Producto ${j + 1}`)}<span class="muted small num" style="margin-left:auto">${x.precio !== null && x.precio !== undefined ? dinero(x.precio, moneda(), 2) : 'sin precio'}</span><span class="chev" style="margin-left:6px">${icono('caret-right')}</span></summary>
       <div class="cuerpo"><div class="campos">
         ${campo(`prod.${j}.nombre`, 'Nombre', x.nombre, { tipo: 'text' })}
         ${campo(`prod.${j}.unidad`, 'Unidad', x.unidad, { tipo: 'text' })}
@@ -141,7 +143,8 @@ function vistaDatos() {
         ${campo(`prod.${j}.capacidad`, 'Capacidad al 100 %', x.capacidad, { unidad: 'u/año' })}
         ${campo(`prod.${j}.crecPrecio`, 'Crecimiento del precio', x.crecPrecio, { pct: true })}
       </div>
-      <p class="muted small">Cantidades por año: ${resumenSerie(x)}</p>
+      ${campo(`prod.${j}.serie`, `Unidades por año (${S.datos.proyecto?.n || '?'} valores)`, serieTexto(x), { tipo: 'text', completo: true, ayuda: 'Sepáralas con punto y coma: 8000; 10000; 12000. Si el enunciado da % de capacidad, edítalo en la hoja Datos.' })}
+      <p class="muted small">Ahora: ${resumenSerie(x)}</p>
       <div>${S.excel && S.libro.tieneDatos ? ir(P.DIRS.H.datos, `C${P.DIRS.R.pct.ini + j}`, 'Editar % o unidades por año') : ''}
         <button class="link" data-a="quitarProd" data-j="${j}">${icono('trash')}Quitar</button></div></div></details>`).join('');
   const R = S.R;
@@ -167,7 +170,7 @@ function vistaDatos() {
       <div class="fila"><span class="et">Costos fijos anuales</span><span class="val">${dinero((d.costosFijos || []).reduce((s, a) => s + (a.monto || 0), 0), moneda())}</span></div>
       ${R ? `<div class="fila"><span class="et">Capital de trabajo total</span><span class="val">${dinero(R.ctTotal, moneda())}</span></div>` : ''}
     </div>
-    ${!S.excel ? '<p class="muted small">En Excel, los activos, los costos fijos y las series por año se editan en la hoja Datos.</p>' : ''}</section>
+    ${!S.excel ? mensaje('info', 'Fuera de Excel solo puedes probar con los ejemplos o cambiar estos datos. Los activos y los costos fijos de tu propio proyecto se cargan en la hoja Datos: abre el complemento dentro de Excel.') : ''}</section>
   <section class="seccion"><h2>Préstamo</h2>
     <div class="campos">
       ${campo('pr.monto', 'Monto', pr.monto, { unidad: moneda(), ayuda: 'Vacío si no hay préstamo.' })}
@@ -177,9 +180,13 @@ function vistaDatos() {
       ${campo('pr.plazo', 'Plazo total', pr.plazo, { unidad: 'años', paso: 1, ayuda: 'Incluye la gracia.' })}
       ${campo('pr.gracia', 'Gracia', pr.gracia, { unidad: 'años', paso: 1, ayuda: 'Solo intereses.' })}
     </div></section>
-  <section class="seccion">${btn('generar', S.generado ? 'Recalcular todo' : 'Generar análisis', { cls: 'primario ancho', ic: 'play', dis: !!S.val.errores.length || !!S.ocupado })}
-    ${S.val.errores.length ? '<p class="muted small">Completa los datos marcados para generar.</p>' : ''}</section>`;
+  <section class="seccion fijo-abajo">${btn('generar', S.generado ? 'Recalcular todo' : 'Generar análisis', { cls: 'primario ancho', ic: 'play', dis: !!S.val.errores.length || !!S.ocupado })}
+    ${S.val.errores.length ? '<p class="muted small">Completa los datos marcados arriba para generar.</p>' : ''}</section>`;
 }
+
+// Unidades por año como texto editable ("8000; 10000; 12000")
+const serieTexto = x => (x.unidades || []).filter(v => v !== null && v !== undefined).join('; ');
+const leerSerie = t => String(t || '').split(/[;\s]+/).map(v => v.replace(/\./g, '').replace(',', '.')).filter(v => v !== '').map(Number).filter(Number.isFinite);
 
 function resumenSerie(x) {
   const u = (x.unidades || []).filter(v => v !== null && v !== undefined);
@@ -199,7 +206,8 @@ function vistaResultados() {
   const blq = P.DIRS.FLUJO.bloques[S.alt];
   const celda = k => (blq ? `Y${blq.ind[k]}` : null);
   const conviene = a.van >= 0;
-  const altBtns = R.hayPrestamo ? `<div class="segmento" role="group" aria-label="Alternativa">${[['puro', 'Puro'], ['constante', 'Constante'], ['cuota', 'Cuota fija']].map(([k, t]) => `<button data-a="alt" data-alt="${k}" aria-pressed="${S.alt === k}">${t}</button>`).join('')}</div>` : '';
+  const altBtns = R.hayPrestamo ? `<div class="segmento" role="group" aria-label="Alternativa">${[['puro', 'Sin préstamo'], ['constante', 'Amort. fija'], ['cuota', 'Cuota fija']].map(([k, t]) => `<button data-a="alt" data-alt="${k}" aria-pressed="${S.alt === k}">${t}</button>`).join('')}</div>
+    <p class="muted tiny">Amort. fija: pagas el mismo capital cada año. Cuota fija: pagas la misma cuota cada año.</p>` : '';
   let filas = '';
   if (S.grupo === 'rent') {
     filas = filaKpi('van', 'VAN', dinero(a.van, m), conviene ? 'ok' : 'bad', conviene ? 'Conviene' : 'No conviene', x.van, celda('van'))
@@ -215,7 +223,8 @@ function vistaResultados() {
         const c = S.alt === 'puro' ? S.sens?.criticos.find(x => x.clave === 'precio') : null;
         if (!c || c.margen === null) return '';
         const m = -c.margen;
-        return filaKpi('mp', m >= 0 ? 'Todos los precios pueden bajar' : 'Los precios deben subir', pct(Math.abs(m), 1), m < 0 ? 'bad' : m < 0.1 ? 'warn' : 'ok', m < 0 ? 'VAN negativo' : m < 0.1 ? 'Margen corto' : 'Holgado', null);
+        const [nv, pal] = margenNivel(m);
+        return filaKpi('mp', m >= 0 ? 'Todos los precios pueden bajar' : 'Los precios deben subir', pct(Math.abs(m), 1), nv, pal, null);
       })();
   } else {
     filas = filaKpi('vac', 'VAC', dinero(a.vac, m), null, '', x.vac, celda('vac'))
@@ -243,7 +252,7 @@ function vistaResultados() {
     <div class="leyenda"><span><i style="background:var(--accent)"></i>Flujo positivo</span><span><i style="background:var(--bad)"></i>Negativo</span><span><i style="background:none;border-top:2px dashed var(--ink);height:0;border-radius:0"></i>Acumulado actualizado</span></div>
   </section>
   <section class="seccion"><h2>Recomendaciones</h2>
-    <div>${recs.map(r => `<details class="acc"><summary>${est(r.nivel, '')}<span>${esc(r.titulo)}</span><span class="chev">${icono('caret-right')}</span></summary>
+    <div>${recs.map(r => `<details class="acc" data-acc="rec-${r.id}"><summary>${est(r.nivel, '')}<span>${esc(r.titulo)}</span><span class="chev">${icono('caret-right')}</span></summary>
       <div class="cuerpo"><b class="small">${esc(r.resumen)}</b>${r.porque.map(t => `<p class="small">${esc(t)}</p>`).join('')}</div></details>`).join('')}</div>
   </section>`;
 }
@@ -296,7 +305,7 @@ function vistaPreguntas() {
     ${btn('preguntar', 'Preguntar', { cls: 'primario ancho', ic: 'target' })}
   </section>
   ${r ? (r.error ? mensaje('bad', esc(r.error)) : `
-  <section class="elevada aparece" aria-live="polite">
+  <section class="elevada aparece" id="respuesta" aria-live="polite">
     <div><p class="muted small">${esc(r.titulo)}</p><div class="heroe">${r.principal.texto}</div><p class="small">${esc(r.frase)}</p></div>
     ${r.nivel && r.nivel !== 'info' ? est(r.nivel, { ok: 'Riesgo bajo', warn: 'Riesgo moderado', bad: 'Riesgo alto' }[r.nivel]) : ''}
     ${graficoRespuesta(r)}
@@ -342,7 +351,7 @@ function vistaSensibilidad() {
     ${G.graficoTornado(s.tornado, s.base)}
   </section>
   <section class="seccion"><h2>Puntos críticos</h2>
-    <div class="lista">${s.criticos.map(c => `<div class="fila"><span class="et small">${esc(c.nombre)}</span>${c.margen === null ? '<span class="val small muted">No llega</span>' : `<span class="val small">${c.margen > 0 ? '+' : ''}${pct(c.margen, 1)}</span>${est(Math.abs(c.margen) < 0.1 ? 'bad' : Math.abs(c.margen) < 0.25 ? 'warn' : 'ok', Math.abs(c.margen) < 0.1 ? 'Corto' : Math.abs(c.margen) < 0.25 ? 'Medio' : 'Holgado')}`}</div>`).join('')}</div>
+    <div class="lista">${s.criticos.map(c => `<div class="fila"><span class="et small">${esc(c.nombre)}</span>${c.margen === null ? '<span class="val small muted">No llega</span>' : `<span class="val small">${c.margen > 0 ? '+' : ''}${pct(c.margen, 1)}</span>${est(...margenNivel(Math.abs(c.margen)))}`}</div>`).join('')}</div>
     <p class="muted small">Cambio que deja el VAN en 0. Ejemplo: "${esc(s.criticos[0]?.nombre || '')}" puede ${s.criticos[0]?.margen < 0 ? 'bajar' : 'subir'} ${s.criticos[0]?.margen === null ? 'sin límite' : pct(Math.abs(s.criticos[0]?.margen || 0), 1)} antes de que el proyecto deje de convenir.</p>
   </section>
   <section class="seccion"><header><h2>Análisis de araña</h2>${ir(P.DIRS.H.riesgo, 'A15')}</header>
@@ -352,7 +361,7 @@ function vistaSensibilidad() {
   <section class="seccion"><h2>Escenarios</h2>
     <table class="tabla"><thead><tr><th>Escenario</th><th class="n">VAN</th><th class="n">TIR</th><th class="n">B/C</th></tr></thead><tbody>
     ${S.esc.map(e => `<tr><td>${{ pesimista: 'Pesimista', base: 'Más probable', optimista: 'Optimista' }[e.tipo]}</td><td class="n ${e.van < 0 ? 'bad-t' : ''}">${corto(e.van, m)}</td><td class="n">${pct(e.tir, 1)}</td><td class="n">${num(e.bc, 2)}</td></tr>`).join('')}</tbody></table>
-    <p class="muted small">Pesimista y optimista usan los extremos de los rangos de riesgo de cada variable.</p>
+    <p class="muted small">El pesimista pone todas las variables en su peor valor a la vez. Es posible pero muy improbable, por eso su VAN puede ser negativo aunque el riesgo de la simulación sea bajo.</p>
   </section>`;
 }
 
@@ -406,7 +415,7 @@ function vistaDiagnostico() {
       <div style="display:flex;width:100%;gap:8px"><b>Año ${p.anio}</b><span class="val" style="margin-left:auto">${dinero(p.flujo, m)}</span></div>
       <p class="small muted">${esc(p.texto)}</p>${p.hito ? est('ok', p.hito) : ''}</div>`).join('')}</div></section>
   <section class="seccion"><h2>Reglas del flujo</h2>
-    <div>${reglasDelFlujo(R).map(x => `<details class="acc"><summary>${esc(x.titulo)}<span class="chev">${icono('caret-right')}</span></summary><div class="cuerpo"><p class="small">${esc(x.texto)}</p></div></details>`).join('')}</div></section>
+    <div>${reglasDelFlujo(R).map((x, i) => `<details class="acc" data-acc="regla${i}"><summary>${esc(x.titulo)}<span class="chev">${icono('caret-right')}</span></summary><div class="cuerpo"><p class="small">${esc(x.texto)}</p></div></details>`).join('')}</div></section>
   <section class="seccion">${btn('copiar', 'Copiar resumen', { cls: 'ancho', ic: 'copy' })}<p class="muted small">Texto listo para pegar en tu informe.</p></section>`;
 }
 
@@ -414,13 +423,19 @@ function vistaDiagnostico() {
 const app = document.getElementById('app');
 function render() {
   const vistas = { inicio: vistaInicio, datos: vistaDatos, resultados: vistaResultados, riesgo: vistaRiesgo, diagnostico: vistaDiagnostico };
-  const foco = document.activeElement?.dataset?.campo;
+  const foco = S.foco || document.activeElement?.dataset?.campo;
   app.innerHTML = `
   <nav class="tabs" role="tablist" aria-label="Secciones">${TABS.map(([k, t, ic]) => `<button class="tab" role="tab" data-a="tab" data-tab="${k}" aria-selected="${S.tab === k}" title="${t}">${icono(ic)}<span class="lbl">${t}</span></button>`).join('')}</nav>
   ${barraEstado()}
-  <main class="main" role="tabpanel">${S.msg ? mensaje(S.msg.nivel, esc(S.msg.texto)) : ''}${vistas[S.tab]()}</main>`;
-  if (foco) { const el = app.querySelector(`[data-campo="${foco}"]`); if (el) { el.focus(); if (el.select && el.type !== 'checkbox' && el.tagName === 'INPUT') { const v = el.value; el.value = ''; el.value = v; } } }
+  <main class="main" role="tabpanel">${S.msg ? `<div id="msg">${mensaje(S.msg.nivel, esc(S.msg.texto))}</div>` : ''}${vistas[S.tab]()}</main>`;
+  // Acordeones: se conservan abiertos o cerrados entre renders
+  app.querySelectorAll('details[data-acc]').forEach(d => { if (S.acc[d.dataset.acc] !== undefined) d.open = S.acc[d.dataset.acc]; });
+  if (foco) { const el = app.querySelector(`[data-campo="${foco}"]`); if (el) { el.focus({ preventScroll: true }); if (el.select && el.type !== 'checkbox' && el.tagName === 'INPUT') { const v = el.value; el.value = ''; el.value = v; } } }
+  // Lleva a la vista lo nuevo: una respuesta de riesgo o un mensaje
+  if (S.mostrar) { const el = app.querySelector(S.mostrar); S.mostrar = null; el?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); }
 }
+document.addEventListener('focusin', e => { S.foco = e.target.dataset?.campo || null; });
+document.addEventListener('toggle', e => { const d = e.target; if (d.dataset?.acc) S.acc[d.dataset.acc] = d.open; }, true);
 function barraEstado() {
   if (S.ocupado) return `<div class="estado" aria-live="polite">${icono('circle-dashed')}<span class="grow">${esc(S.ocupado)}</span></div>`;
   if (S.desact && S.generado && S.excel) return `<div class="estado aviso">${icono('warning')}<span class="grow">Datos cambiaron. Las fórmulas ya se actualizaron; riesgo y diagnóstico no.</span>${btn('generar', 'Recalcular', { cls: 'texto' })}</div>`;
@@ -432,7 +447,7 @@ function barraEstado() {
 // ------------------------------------------------------------------ acciones
 async function conCarga(texto, fn) {
   S.ocupado = texto; S.msg = null; render();
-  try { await fn(); } catch (e) { console.error(e); S.msg = { nivel: 'bad', texto: `No se pudo completar: ${e.message || e}. Tus datos no cambiaron.` }; }
+  try { await fn(); } catch (e) { console.error(e); S.msg = { nivel: 'bad', texto: `No se pudo completar: ${e.message || e}. Tus datos no cambiaron.` }; S.mostrar = '#msg'; }
   S.ocupado = null; render();
 }
 
@@ -507,6 +522,7 @@ function preguntar(q = S.q) {
   if (!q.tipo) S.q = { ...q };
   const r = responder(q.tipo ? q : S.q, S.sim, ctx());
   S.resp = r;
+  S.mostrar = '#respuesta';
   if (!r.error) S.hist.unshift({ titulo: r.titulo, valor: r.principal.texto, q: { ...(q.tipo ? q : S.q) }, viejo: false });
   if (S.hist.length > 30) S.hist.length = 30;
 }
@@ -571,6 +587,19 @@ async function cambiarCampo(el) {
   if (el.dataset.pct) v = v === '' ? null : Number(v) / 100;
   else if (el.type === 'number') v = v === '' ? null : Number(v);
   let celda = null, valorCelda = v;
+  if (c.startsWith('prod.') && c.endsWith('.serie')) {
+    const j = Number(c.split('.')[1]);
+    const n = S.datos.proyecto?.n || 20;
+    const u = leerSerie(el.value).slice(0, 20);
+    S.datos.productos[j].unidades = Array.from({ length: 20 }, (_, t) => (t < u.length ? u[t] : null));
+    recomputar(); if (S.sim) S.simDesact = true; render();
+    if (S.excel && S.libro.tieneDatos) {
+      const fila = P.DIRS.R.unid.ini + filaProd(j);
+      await P.escribirRango(`C${fila}:V${fila}`, [Array.from({ length: 20 }, (_, t) => (t < u.length ? u[t] : ''))]);
+    }
+    if (u.length && u.length !== n) { S.msg = { nivel: 'warn', texto: `Escribiste ${u.length} valores y el proyecto dura ${n} años.` }; S.mostrar = '#msg'; render(); }
+    return;
+  }
   if (c.startsWith('prod.')) {
     const [, j, k] = c.split('.');
     S.datos.productos[j][k] = v;
@@ -609,7 +638,7 @@ document.addEventListener('click', async e => {
     case 'leer': await conCarga('Leyendo tu hoja', async () => {
       const info = await P.explorarLibro(); S.libro = info;
       if (info.tieneDatos) { await cargarDatos(await P.leerDatosHoja(), { escribir: false }); S.generado = info.generado; vigilar(); }
-      else if (info.plantilla) { await cargarDatos(await P.leerPlantillaClase(info.plantilla)); S.msg = { nivel: 'ok', texto: `Importé la hoja ${info.plantilla} a la hoja Datos. Revisa y pulsa Generar análisis.` }; }
+      else if (info.plantilla) { await cargarDatos(await P.leerPlantillaClase(info.plantilla)); S.mostrar = '#msg'; S.msg = { nivel: 'ok', texto: `Importé la hoja ${info.plantilla} a la hoja Datos. Revisa y pulsa Generar análisis.` }; }
       else S.msg = { nivel: 'warn', texto: 'No encontré la hoja Datos ni la plantilla de clase. Usa Plantilla vacía para empezar.' };
     }); break;
     case 'generar': await generar(); break;
@@ -657,7 +686,19 @@ document.addEventListener('click', async e => {
       await X.agregarPregunta(fila, v);
       P.DIRS.RIESGO.ultPregunta = fila;
     }); break;
-    case 'copiar': try { await navigator.clipboard.writeText(textoResumen()); S.msg = { nivel: 'ok', texto: 'Resumen copiado.' }; } catch { S.msg = { nivel: 'warn', texto: 'No se pudo copiar. Selecciona el texto en la hoja Diagnóstico.' }; } render(); break;
+    case 'copiar': {
+      const texto = textoResumen();
+      let ok = false;
+      try { await navigator.clipboard.writeText(texto); ok = true; } catch {
+        // El panel de Office a veces no deja usar el portapapeles moderno
+        const ta = document.createElement('textarea'); ta.value = texto; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { ok = document.execCommand('copy'); } catch { ok = false; }
+        ta.remove();
+      }
+      S.msg = ok ? { nivel: 'ok', texto: 'Resumen copiado. Pégalo en tu informe.' } : { nivel: 'warn', texto: 'No se pudo copiar. Copia el texto de la hoja Diagnóstico.' };
+      S.mostrar = '#msg'; render(); break;
+    }
     default:
   }
 });

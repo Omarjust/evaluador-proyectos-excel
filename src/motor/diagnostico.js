@@ -25,7 +25,7 @@ export function tirOTur(alt, tasa) {
     r.razones.push(`La TIR (${pct(tir)}) está muy por encima de la tasa (${pct(tasa)}). La TIR supone que cada flujo se reinvierte a la misma TIR, algo poco realista; la TUR los reinvierte a la tasa de descuento y da un número más creíble (${pct(tur)}).`);
   }
   if (r.usar === 'TIR') {
-    r.razones.push(`El flujo es convencional (una sola inversión al inicio y luego flujos positivos) y la TIR (${pct(tir)}) no está muy lejos de la tasa, así que es confiable. La TUR (${pct(tur)}) lleva a la misma decisión.`);
+    r.razones.push(`El flujo es convencional (una sola inversión al inicio y luego flujos positivos) y la TIR (${pct(tir)}) no supera a la tasa (${pct(tasa)}) por más de 15 puntos ni la duplica, así que su supuesto de reinversión es razonable. La TUR (${pct(tur)}) lleva a la misma decisión.`);
   }
   r.decision = r.valor !== null && r.valor > tasa ? 'acepta' : 'rechaza';
   return r;

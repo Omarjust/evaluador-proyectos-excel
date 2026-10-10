@@ -67,7 +67,8 @@ export function validar(d) {
   const p = d.proyecto || {};
   if (!p.n || p.n < 1 || p.n > 20) errores.push({ campo: 'vida', fila: R.vida, texto: 'Falta la vida útil del proyecto (entre 1 y 20 años).' });
   if (p.tasa === null || p.tasa === undefined || p.tasa === '') errores.push({ campo: 'tasa', fila: R.tasa, texto: 'Falta la tasa de descuento.' });
-  else if (p.tasa > 1) avisos.push({ campo: 'tasa', fila: R.tasa, texto: `La tasa de descuento es ${p.tasa}: escríbela como porcentaje (por ejemplo 13 %), no como 13.` });
+  else if (p.tasa > 1) avisos.push({ campo: 'tasa', fila: R.tasa, texto: `La tasa de descuento quedó en ${Math.round(p.tasa * 100)} %. ¿Quisiste decir ${Math.round(p.tasa * 100) / 100} %? En el panel escribe solo el número (13); en la hoja, 13 %.` });
+  else if (p.tasa > 0 && p.tasa < 0.01) avisos.push({ campo: 'tasa', fila: R.tasa, texto: `La tasa de descuento quedó en ${(p.tasa * 100).toFixed(2)} %. ¿Quisiste decir ${Math.round(p.tasa * 10000) / 100} %? En el panel escribe solo el número (13).` });
   if (!d.productos?.length) errores.push({ campo: 'productos', fila: R.prod.ini, texto: 'Agrega al menos un producto con su precio.' });
   (d.productos || []).forEach((x, j) => {
     if (x.precio === null || x.precio === undefined) errores.push({ campo: 'productos', fila: R.prod.ini + j, texto: `${x.nombre}: falta el precio.` });

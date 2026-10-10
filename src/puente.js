@@ -60,6 +60,14 @@ export async function ajustarVista(D) {
   return { n: n.proyecto.n, periodos: periodosPrestamo(n) };
 }
 
+// Escribe un rango de Datos (por ejemplo una serie por año)
+export async function escribirRango(addr, matriz) {
+  return Excel.run(async ctx => {
+    ctx.workbook.worksheets.getItem(H.datos).getRange(addr).values = matriz;
+    await ctx.sync();
+  });
+}
+
 // Escribe una celda de Datos (formulario del panel → hoja)
 export async function escribirCelda(addr, valor) {
   return Excel.run(async ctx => {

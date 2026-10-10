@@ -48,7 +48,7 @@ test('importa la plantilla de clase (Caso 5 y Caso 6)', () => {
 test('validación con mensajes claros', () => {
   const v = validar({ proyecto: { n: 0, tasa: 13 }, productos: [{ nombre: 'A', precio: 5, cvu: 6, pct: [], unidades: [] }], activos: [{ nombre: 'Terreno', valor: 1, vida: 10 }] });
   assert.ok(v.errores.some(e => e.campo === 'vida'));
-  assert.ok(v.avisos.some(e => /porcentaje/.test(e.texto)));
+  assert.ok(v.avisos.some(e => /Quisiste decir/.test(e.texto)));
   assert.ok(v.avisos.some(e => /terreno/i.test(e.texto)));
   assert.ok(v.errores.some(e => /cantidades/.test(e.texto)));
 });

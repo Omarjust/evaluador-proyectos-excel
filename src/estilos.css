@@ -8,8 +8,8 @@
 @import '@fontsource/geist-mono/500.css';
 
 :root {
-  --bg: #F1F5F9; --surface: #FBFCFD; --line: #E2E8F0; --line-2: #CBD5E1;
-  --ink: #0F172A; --muted: #526075; --accent: #2F6DB5; --on-accent: #F8FAFC; --accent-soft: #E3ECF7;
+  --bg: #F1F5F9; --surface: #FBFCFD; --line: #E2E8F0; --line-2: #94A3B8;
+  --ink: #0F172A; --muted: #526075; --accent: #2A62A3; --on-accent: #F8FAFC; --accent-soft: #E3ECF7;
   --ok: #15803D; --warn: #B45309; --bad: #B91C1C;
   --ok-soft: #E7F4EC; --warn-soft: #FBF1E3; --bad-soft: #FBE9E9;
   --shadow: 0 1px 2px rgb(15 23 42 / .06), 0 8px 20px -12px rgb(15 23 42 / .20);
@@ -64,7 +64,7 @@ p { margin: 0; }
 .tab:focus-visible, .btn:focus-visible, .pill:focus-visible, .link:focus-visible, input:focus-visible, select:focus-visible, .porque-btn:focus-visible, .acc > summary:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
-@media (max-width: 340px) { .tab span.lbl { display: none; } .tab { padding: 12px 2px; } }
+@media (max-width: 340px) { .tab span.lbl { font-size: 10px; } .tab { padding: 8px 0 6px; } }
 
 .estado {
   display: flex; align-items: center; gap: 8px; min-height: 32px;
@@ -157,7 +157,8 @@ input[aria-invalid="true"] { border-color: var(--bad); }
 .acc .cuerpo p { color: var(--muted); }
 
 /* ---------- ¿Por qué? ---------- */
-.porque-btn { appearance: none; border: 0; background: none; cursor: pointer; color: var(--accent); font-size: 12px; padding: 0 2px; display: inline-flex; align-items: center; gap: 2px; }
+.porque-btn { appearance: none; border: 0; background: none; cursor: pointer; color: var(--accent); font-size: 12px; min-width: 28px; min-height: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; gap: 2px; border-radius: var(--r); }
+.porque-btn:hover { background: var(--accent-soft); }
 .porque { padding: 8px 10px 10px; background: var(--bg); display: grid; gap: 6px; font-size: 12px; }
 .porque dt { font-weight: 600; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .porque dd { margin: 0; }
@@ -202,3 +203,9 @@ input[aria-invalid="true"] { border-color: var(--bad); }
 .tabla td.n, .tabla th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .dos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* Botón principal de Datos siempre a mano */
+.fijo-abajo { position: sticky; bottom: 0; z-index: 4; background: var(--bg); padding: 10px 0 12px; border-top: 1px solid var(--line); margin-bottom: -32px; }
+
+/* Al desplazar a una respuesta o mensaje, que no quede debajo de las pestañas fijas */
+#respuesta, #msg { scroll-margin-top: 96px; }
